@@ -411,8 +411,9 @@ animals.on_step = function(self, dtime)
 			if name and check_wielded(name, def.stats.follow_items) == false then
 				dist = -1
 			end
-			if dist == -1 or dist > def.stats.follow_radius then
+			if self.autofollowing == true and (dist == -1 or dist > def.stats.follow_radius) then
 				self.target = nil
+				self.autofollowing = false
 				self.mode = ""
 				self.on_follow_end(self)
 				current_mode = self.mode
@@ -424,7 +425,7 @@ animals.on_step = function(self, dtime)
 						self.dir.y = me:getvelocity().y
 					end
 					local speed
-					if dist < def.stats.follow_stop_distance then
+					if self.autofollowing == true and (dist < def.stats.follow_stop_distance) then
 						speed = 0
 						update_animation(me, def.model.animations["idle"])
 					else
@@ -453,6 +454,7 @@ animals.on_step = function(self, dtime)
 				if self.target then
 					local name = self.target:get_wielded_item():get_name()
 					if name and check_wielded(name, def.stats.follow_items) == true then
+						self.autofollowing = true
 						self.on_follow_start(self)
 						current_mode = "follow"
 					else
@@ -619,6 +621,7 @@ animals.get_staticdata = function(self)
 		owner_name = self.owner_name,
 		dir = self.dir,
 		in_water = self.in_water,
+		autofollowing = self.autofollowing,
 
 		lifetimer = self.lifetimer,
 		yawtimer = self.yawtimer,

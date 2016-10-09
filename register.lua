@@ -101,6 +101,7 @@ local function translate_def(def)
 		self.target = nil
 		self.dir = {x = 0, z = 0}
 		self.in_water = false
+		self.autofollowing = false
 
 		-- Timers
 		self.lifetimer = 0
@@ -130,6 +131,7 @@ local function translate_def(def)
 		end
 
 		if self.mode == "follow" and self.target == nil then
+			self.autofollowing = false
 			self.mode = "idle"
 		end
 
