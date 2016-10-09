@@ -382,92 +382,94 @@ animals.on_step = function(self, dtime)
 	current_pos.y = current_pos.y + 0.5
 	local moved = has_moved(current_pos, self.last_pos) or false
 
-	-- update position and current node
-	if moved == true or not self.last_pos then
-		self.last_pos = current_pos
-		if self.nodetimer > 0.2 then
-			self.nodetimer = 0
-			local current_node = core.get_node_or_nil(current_pos)
-			self.last_node = current_node
-		end
-	else
-		if (current_mode ~= "follow" and (modes[current_mode].moving_speed or 0) > 0) or current_mode == "follow" then
-			update_velocity(me, nullVec, 0)
-			if modes["idle"] and not current_mode == "follow" then
-				current_mode = "idle"
-				self.modetimer = 0
+	if current_mode ~= "" then
+		-- update position and current node
+		if moved == true or not self.last_pos then
+			self.last_pos = current_pos
+			if self.nodetimer > 0.2 then
+				self.nodetimer = 0
+				local current_node = core.get_node_or_nil(current_pos)
+				self.last_node = current_node
 			end
-		end
-	end
-
-	-- follow target
-	if self.target and self.followtimer > 0.6 then
-		self.followtimer = 0
-		local p2 = self.target:getpos()
-		local dir = get_dir(current_pos, p2)
-		local dist = get_distance(dir)
-		if dist == -1 or dist > def.stats.follow_radius then
-			self.target = nil
-			current_mode = ""
-			self.on_follow_end(self)
 		else
-			if current_mode == "follow" then
-				self.dir = vector.normalize(dir)
-				me:setyaw(get_yaw(dir))
-				if self.in_water then
-					self.dir.y = me:getvelocity().y
+			if (current_mode ~= "follow" and (modes[current_mode].moving_speed or 0) > 0) or current_mode == "follow" then
+				update_velocity(me, nullVec, 0)
+				if modes["idle"] and not current_mode == "follow" then
+					current_mode = "idle"
+					self.modetimer = 0
 				end
-				local speed
-				if dist < def.stats.follow_stop_distance then
-					speed = 0
-					update_animation(me, def.model.animations["idle"])
-				else
-					speed = def.stats.follow_speed
-					local anim_def = def.model.animations["follow"]
-					if self.in_water and def.model.animations["swim"] then
-						anim_def = def.model.animations["swim"]
+			end
+		end
+
+		-- follow target
+		if self.target and self.followtimer > 0.6 then
+			self.followtimer = 0
+			local p2 = self.target:getpos()
+			local dir = get_dir(current_pos, p2)
+			local dist = get_distance(dir)
+			if dist == -1 or dist > def.stats.follow_radius then
+				self.target = nil
+				current_mode = ""
+				self.on_follow_end(self)
+			else
+				if current_mode == "follow" then
+					self.dir = vector.normalize(dir)
+					me:setyaw(get_yaw(dir))
+					if self.in_water then
+						self.dir.y = me:getvelocity().y
 					end
-					update_animation(me, anim_def)
-				end
-				update_velocity(me, self.dir, speed or 0)
-			end
-		end
-	end
-
-	-- search for a target to follow
-	if not self.target and def.stats.follow_items then
-		if self.searchtimer > 0.6 then
-			self.searchtimer = 0
-			local targets = animals.findTarget(me, current_pos, def.stats.follow_radius, "player", self.owner_name, false)
-			if #targets > 1 then
-				self.target = targets[math.random(1, #targets)]
-			elseif #targets == 1 then
-				self.target = targets[1]
-			end
-			if self.target then
-				local name = self.target:get_wielded_item():get_name()
-				if name and check_wielded(name, def.stats.follow_items) == true then
-					self.on_follow_start(self)
-					current_mode = "follow"
-				else
-					self.target = nil
+					local speed
+					if dist < def.stats.follow_stop_distance then
+						speed = 0
+						update_animation(me, def.model.animations["idle"])
+					else
+						speed = def.stats.follow_speed
+						local anim_def = def.model.animations["follow"]
+						if self.in_water and def.model.animations["swim"] then
+							anim_def = def.model.animations["swim"]
+						end
+						update_animation(me, anim_def)
+					end
+					update_velocity(me, self.dir, speed or 0)
 				end
 			end
 		end
-	end
 
-	-- check for a node to eat
-	if current_mode == "eat" and not self.eat_node then
-		local node_pos = {x = current_pos.x, y = current_pos.y - 1, z = current_pos.z}
-		local node = core.get_node_or_nil(node_pos)
-		for _, name in pairs(def.stats.eat_nodes) do
-			if node and node.name == name then
-				self.eat_node = node_pos
-				break
+		-- search for a target to follow
+		if not self.target and def.stats.follow_items then
+			if self.searchtimer > 0.6 then
+				self.searchtimer = 0
+				local targets = animals.findTarget(me, current_pos, def.stats.follow_radius, "player", self.owner_name, false)
+				if #targets > 1 then
+					self.target = targets[math.random(1, #targets)]
+				elseif #targets == 1 then
+					self.target = targets[1]
+				end
+				if self.target then
+					local name = self.target:get_wielded_item():get_name()
+					if name and check_wielded(name, def.stats.follow_items) == true then
+						self.on_follow_start(self)
+						current_mode = "follow"
+					else
+						self.target = nil
+					end
+				end
 			end
 		end
-		if not self.eat_node then
-			current_mode = ""
+
+		-- check for a node to eat
+		if current_mode == "eat" and not self.eat_node then
+			local node_pos = {x = current_pos.x, y = current_pos.y - 1, z = current_pos.z}
+			local node = core.get_node_or_nil(node_pos)
+			for _, name in pairs(def.stats.eat_nodes) do
+				if node and node.name == name then
+					self.eat_node = node_pos
+					break
+				end
+			end
+			if not self.eat_node then
+				current_mode = ""
+			end
 		end
 	end
 
