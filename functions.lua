@@ -409,8 +409,9 @@ animals.on_step = function(self, dtime)
 			local dist = get_distance(dir)
 			if dist == -1 or dist > def.stats.follow_radius then
 				self.target = nil
-				current_mode = ""
+				self.mode = ""
 				self.on_follow_end(self)
+				current_mode = self.mode
 			else
 				if current_mode == "follow" then
 					self.dir = vector.normalize(dir)
