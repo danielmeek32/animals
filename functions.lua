@@ -407,6 +407,10 @@ animals.on_step = function(self, dtime)
 			local p2 = self.target:getpos()
 			local dir = get_dir(current_pos, p2)
 			local dist = get_distance(dir)
+			local name = self.target:get_wielded_item():get_name()
+			if name and check_wielded(name, def.stats.follow_items) == false then
+				dist = -1
+			end
 			if dist == -1 or dist > def.stats.follow_radius then
 				self.target = nil
 				self.mode = ""
