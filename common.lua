@@ -1,5 +1,5 @@
 --= Animals mod =--
--- Copyright (c) 2016 Daniel <https://github.com/daniel-32>
+-- Copyright (c) 2016 Daniel <https://github.com/danielmeek32>
 --
 -- Modified from Creatures MOB-Engine (cme)
 -- Copyright (c) 2015 BlockMen <blockmen2015@gmail.com>
