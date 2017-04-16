@@ -562,11 +562,10 @@ animals.on_step = function(self, dtime)
 	end
 
 	--swim
-	if self.swimtimer > 0.8 and self.last_node then
-		self.swimtimer = 0
-		local name = self.last_node.name
-		if name then
-			if name == "default:water_source" then
+	if self.last_node then
+		if self.last_node.name == "default:water_source" then
+			if self.in_water == false or self.swimtimer > 0.8 then
+				self.swimtimer = 0
 				local vel = me:getvelocity()
 				update_velocity(me, {x = vel.x, y = 0.75, z = vel.z}, 1)
 				me:setacceleration({x = 0, y = -0.5, z = 0})
@@ -577,11 +576,11 @@ animals.on_step = function(self, dtime)
 					core.sound_play(swim_snd.name, {pos = current_pos, gain = swim_snd.gain or 1, max_hear_distance = swim_snd.distance or 10})
 				end
 				spawn_particles(current_pos, vel, "bubble.png")
-			else
-				if self.in_water == true then
-					self.in_water = false
-					me:setacceleration({x = 0, y = -0.75, z = 0})
-				end
+			end
+		else
+			if self.in_water == true then
+				self.in_water = false
+				me:setacceleration({x = 0, y = -15, z = 0})
 			end
 		end
 	end
