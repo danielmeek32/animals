@@ -99,7 +99,6 @@ local function translate_def(def)
 		self.tamed = false
 		self.owner_name = ""
 		self.target = nil
-		self.dir = {x = 0, z = 0}
 		self.in_water = false
 		self.autofollowing = false
 

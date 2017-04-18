@@ -22,10 +22,6 @@
 -- 3. This notice may not be removed or altered from any source distribution.
 --
 
--- constants
-nullVec = {x = 0, y = 0, z = 0}
-DEGTORAD = math.pi / 180.0
-
 -- common functions
 function animals.rnd(table, errval)
 	if not errval then

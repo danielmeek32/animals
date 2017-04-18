@@ -57,51 +57,10 @@ local function has_moved(pos1, pos2)
 	return not animals.comparePos(pos1, pos2)
 end
 
-local function get_dir(pos1, pos2)
-	local retval
-	if pos1 and pos2 then
-		retval = {x = pos2.x - pos1.x, y = pos2.y - pos1.y, z = pos2.z - pos1.z}
-	end
-	return retval
-end
-
-local function get_distance(vec)
-	if not vec then
-		return -1
-	end
-	return math.sqrt((vec.x)^2 + (vec.y)^2 + (vec.z)^2)
-end
-
 local function update_animation(obj_ref, anim_def)
 	if anim_def and obj_ref then
 		obj_ref:set_animation({x = anim_def.start, y = anim_def.stop}, anim_def.speed, 0, anim_def.loop)
 	end
-end
-
-local function update_velocity(obj_ref, dir, speed, add)
-	local velo = obj_ref:getvelocity()
-	if not dir.y then
-		dir.y = velo.y/speed
-	end
-	local new_velo = {x = dir.x * speed, y = dir.y * speed or velo.y , z = dir.z * speed}
-	if add then
-		new_velo = vector.add(velo, new_velo)
-	end
-	obj_ref:setvelocity(new_velo)
-end
-
-local function get_yaw(dir_or_yaw)
-	local yaw = 360 * math.random()
-	if dir_or_yaw and type(dir_or_yaw) == "table" then
-		yaw = math.atan(dir_or_yaw.z / dir_or_yaw.x) + math.pi^2 - 2
-		if dir_or_yaw.x > 0 then
-			yaw = yaw + math.pi
-		end
-	elseif dir_or_yaw and type(dir_or_yaw) == "number" then
-		-- here could be a value based on given yaw
-	end
-
-	return yaw
 end
 
 local function despawn_mob(me)
@@ -115,8 +74,8 @@ local function kill_mob(me, def)
 		despawn_mob(me)
 	end
 	local pos = me:getpos()
-	me:setvelocity(nullVec)
-	me:set_properties({collisionbox = nullVec})
+	me:setvelocity({x = 0, y = 0, z = 0})
+	me:set_properties({collisionbox = {x = 0, y = 0, z = 0}})
 	me:set_hp(0)
 
 	if def.sounds and def.sounds.on_death then
@@ -378,22 +337,20 @@ animals.on_step = function(self, dtime)
 	local modes = def.modes
 	local current_mode = self.mode
 	local me = self.object
-	local current_pos = me:getpos()
-	current_pos.y = current_pos.y + 0.5
-	local moved = has_moved(current_pos, self.last_pos) or false
+	local moved = has_moved(me:getpos(), self.last_pos) or false
 
 	if current_mode ~= "" then
 		-- update position and current node
 		if moved == true or not self.last_pos then
-			self.last_pos = current_pos
+			self.last_pos = me:getpos()
 			if self.nodetimer > 0.2 then
 				self.nodetimer = 0
-				local current_node = core.get_node_or_nil(current_pos)
+				local current_node = core.get_node_or_nil(me:getpos())
 				self.last_node = current_node
 			end
 		else
 			if (current_mode ~= "follow" and (modes[current_mode].moving_speed or 0) > 0) or current_mode == "follow" then
-				update_velocity(me, nullVec, 0)
+				me:setvelocity({x = 0, y = me:getvelocity().y, z = 0})
 				if modes["idle"] and not current_mode == "follow" then
 					current_mode = "idle"
 					self.modetimer = 0
@@ -404,9 +361,12 @@ animals.on_step = function(self, dtime)
 		-- follow target
 		if self.target and self.followtimer > 0.6 then
 			self.followtimer = 0
-			local p2 = self.target:getpos()
-			local dir = get_dir(current_pos, p2)
-			local dist = get_distance(dir)
+			local my_pos = me:getpos()
+			local target_pos = self.target:getpos()
+			local dir = vector.direction(my_pos, target_pos)
+			dir.y = 0
+			dir = vector.normalize(dir)
+			local dist = vector.distance(my_pos, target_pos)
 			local name = self.target:get_wielded_item():get_name()
 			if name and check_wielded(name, def.stats.follow_items) == false then
 				dist = -1
@@ -419,11 +379,6 @@ animals.on_step = function(self, dtime)
 				current_mode = self.mode
 			else
 				if current_mode == "follow" then
-					self.dir = vector.normalize(dir)
-					me:setyaw(get_yaw(dir))
-					if self.in_water then
-						self.dir.y = me:getvelocity().y
-					end
 					local speed
 					if self.autofollowing == true and (dist < def.stats.follow_stop_distance) then
 						speed = 0
@@ -436,7 +391,7 @@ animals.on_step = function(self, dtime)
 						end
 						update_animation(me, anim_def)
 					end
-					update_velocity(me, self.dir, speed or 0)
+					me:setvelocity({x = dir.x * speed, y = me:getvelocity().y, z = dir.z * speed})
 				end
 			end
 		end
@@ -445,7 +400,7 @@ animals.on_step = function(self, dtime)
 		if not self.target and def.stats.follow_items then
 			if self.searchtimer > 0.6 then
 				self.searchtimer = 0
-				local targets = animals.findTarget(me, current_pos, def.stats.follow_radius, "player", self.owner_name, false)
+				local targets = animals.findTarget(me, me:getpos(), def.stats.follow_radius, "player", self.owner_name, false)
 				if #targets > 1 then
 					self.target = targets[math.random(1, #targets)]
 				elseif #targets == 1 then
@@ -466,7 +421,8 @@ animals.on_step = function(self, dtime)
 
 		-- check for a node to eat
 		if current_mode == "eat" and not self.eat_node then
-			local node_pos = {x = current_pos.x, y = current_pos.y - 1, z = current_pos.z}
+			local my_pos = me:getpos()
+			local node_pos = {x = my_pos.x, y = my_pos.y - 1.0, z = my_pos.z}
 			local node = core.get_node_or_nil(node_pos)
 			for _, name in pairs(def.stats.eat_nodes) do
 				if node and node.name == name then
@@ -514,28 +470,34 @@ animals.on_step = function(self, dtime)
 		end
 	end
 
-	-- mode has changed, do things
-	if current_mode ~= self.last_mode then
+	if current_mode ~= self.last_mode then	-- mode has changed
 		self.last_mode = current_mode
 
+		-- reset timers
+		self.yawtimer = 0
+		-- TODO: sound timer
+
+		-- change speed to match new mode
 		local moving_speed
 		if current_mode == "follow" then
 			moving_speed = def.stats.follow_speed
 		else
 			moving_speed = modes[current_mode].moving_speed or 0
 		end
-		if moving_speed > 0 then
-			local yaw = (get_yaw(me:getyaw()) + 90.0) * DEGTORAD
-			me:setyaw(yaw + 4.73)
-			self.dir = {x = math.cos(yaw), y = 0, z = math.sin(yaw)}
-			if self.in_water == true then
-				moving_speed = moving_speed * 0.7
-			end
-		else
-			self.dir = nullVec
+		if self.in_water == true then
+			moving_speed = moving_speed * 0.7
 		end
-		update_velocity(me, self.dir, moving_speed)
+		if moving_speed > 0 then
+			-- get current yaw
+			local yaw = me:getyaw()
+			-- move in direction of current yaw at the calculated speed
+			me:setvelocity({x = math.sin(yaw) * moving_speed, y = me:getvelocity().y, z = math.cos(yaw) * moving_speed})
+		else
+			-- stop moving
+			me:setvelocity({x = 0, y = me:getvelocity().y, z = 0})
+		end
 
+		-- set animation
 		local anim_def = def.model.animations[current_mode]
 		if self.in_water and def.model.animations["swim"] then
 			anim_def = def.model.animations["swim"]
@@ -543,20 +505,22 @@ animals.on_step = function(self, dtime)
 		update_animation(me, anim_def)
 	end
 
-	-- update yaw
+	-- change yaw randomly
 	if current_mode ~= "follow" then
 		if modes[current_mode].update_yaw and self.yawtimer > modes[current_mode].update_yaw then
 			self.yawtimer = 0
-			local mod = nil
-			if current_mode == "_run" then
-				mod = me:getyaw()
-			end
-			local yaw = (get_yaw(mod) + 90.0) * DEGTORAD
-			me:setyaw(yaw + 4.73)
+
+			-- generate a new yaw
+			local yaw = (math.random() * 360.0) / 180.0 * math.pi
+
+			-- change the direction
 			local moving_speed = modes[current_mode].moving_speed or 0
 			if moving_speed > 0 then
-				self.dir = {x = math.cos(yaw), y = nil, z = math.sin(yaw)}
-				update_velocity(me, self.dir, moving_speed)
+				-- move in the new direction
+				me:setvelocity({x = math.sin(yaw) * moving_speed, y = me:getvelocity().y, z = math.cos(yaw) * moving_speed})
+			else
+				-- the mob is not moving, so set the yaw manually (allows the yaw to change even when the mob is stationary)
+				me:setyaw(yaw)
 			end
 		end
 	end
@@ -567,15 +531,15 @@ animals.on_step = function(self, dtime)
 			if self.in_water == false or self.swimtimer > 0.8 then
 				self.swimtimer = 0
 				local vel = me:getvelocity()
-				update_velocity(me, {x = vel.x, y = 0.75, z = vel.z}, 1)
+				me:setvelocity({x = vel.x, y = 0.75, z = vel.z})
 				me:setacceleration({x = 0, y = -0.5, z = 0})
 				self.in_water = true
 				-- play swimming sounds
 				if def.sounds and def.sounds.swim then
 					local swim_snd = def.sounds.swim
-					core.sound_play(swim_snd.name, {pos = current_pos, gain = swim_snd.gain or 1, max_hear_distance = swim_snd.distance or 10})
+					core.sound_play(swim_snd.name, {pos = me:getpos(), gain = swim_snd.gain or 1, max_hear_distance = swim_snd.distance or 10})
 				end
-				spawn_particles(current_pos, vel, "bubble.png")
+				spawn_particles(me:getpos(), vel, "bubble.png")
 			end
 		else
 			if self.in_water == true then
@@ -603,7 +567,7 @@ animals.on_step = function(self, dtime)
 		if rnd_sound and self.soundtimer > self.snd_rnd_time + math.random() then
 			self.soundtimer = 0
 			self.snd_rnd_time = nil
-			core.sound_play(rnd_sound.name, {pos = current_pos, gain = rnd_sound.gain or 1, max_hear_distance = rnd_sound.distance or 30})
+			core.sound_play(rnd_sound.name, {pos = me:getpos(), gain = rnd_sound.gain or 1, max_hear_distance = rnd_sound.distance or 30})
 		end
 	end
 
@@ -618,7 +582,7 @@ animals.get_staticdata = function(self)
 		stunned = self.stunned,
 		tamed = self.tamed,
 		owner_name = self.owner_name,
-		dir = self.dir,
+		--dir = self.dir,
 		in_water = self.in_water,
 		autofollowing = self.autofollowing,
 
