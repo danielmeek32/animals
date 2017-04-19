@@ -27,21 +27,16 @@
 
 local update_animation
 
-local function get_def(self)
-	return minetest.registered_entities[self.mob_name]
-end
-
 -- get the correct speed for the current mode
 local function get_target_speed(self)
-	local def = get_def(self)
 	if self.mode == "follow" then
-		if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) < def.stats.follow_stop_distance then
+		if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) < self.stats.follow_stop_distance then
 			return 0
 		else
-			return def.stats.follow_speed
+			return self.stats.follow_speed
 		end
 	else
-		return def.modes[self.mode].moving_speed or 0
+		return self.modes[self.mode].moving_speed or 0
 	end
 end
 
@@ -49,8 +44,6 @@ end
 -- If new_direction is nil, randomly chooses a new direction for the mob and sets it as the current direction.
 -- If new_direction is non-nil, sets the current direction to new_direction. If the current mode requests that the mob is moving, it will begin moving at the mode's speed in the new direction. If the current mode requests that the mob is stationary, it will remain stationary while visually changing the direction that it is facing. Note that the mob's actual speed is ignored; only the speed according to the current mode is used.
 local function change_direction(self, new_direction)
-	local def = get_def(self)
-
 	if new_direction == nil then
 		-- randomly choose a new direction
 		local selected_direction = math.random() * math.pi * 2
@@ -74,15 +67,13 @@ end
 -- If new_mode is nil, randomly selects a mode that is valid in the current mob state and sets it as the current mode.
 -- If new_mode is non-nil, sets the current mode to new_mode. new_mode must refer to a mode that exists, and should be valid for the current mov state.
 local function change_mode(self, new_mode)
-	local def = get_def(self)
-
 	if new_mode == nil then
 		local selected_mode
 
 		local valid = false
 		while valid == false do
 			-- randomly choose a new mode
-			selected_mode = animals.rnd(def.modes)
+			selected_mode = animals.rnd(self.modes)
 
 			-- check that the new mode is valid
 			valid = true
@@ -94,7 +85,7 @@ local function change_mode(self, new_mode)
 					node_pos.y = node_pos.y - 0.5
 					local node = minetest.get_node_or_nil(node_pos)
 					valid = false
-					for _, name in pairs(def.stats.eat_nodes) do
+					for _, name in pairs(self.stats.eat_nodes) do
 						if node and name == node.name then
 							valid = true
 							break
@@ -130,9 +121,9 @@ local function change_mode(self, new_mode)
 		end
 
 		-- set animation
-		local anim_def = def.model.animations[self.mode]
-		if self.in_water and def.model.animations["swim"] then
-			anim_def = def.model.animations["swim"]
+		local anim_def = self.model.animations[self.mode]
+		if self.in_water and self.model.animations["swim"] then
+			anim_def = self.model.animations["swim"]
 		end
 		update_animation(self.object, anim_def)
 
@@ -169,7 +160,7 @@ local function change_mode(self, new_mode)
 			local node_pos = self.object:getpos()
 			node_pos.y = node_pos.y - 0.5
 			local node = minetest.get_node_or_nil(node_pos)
-			for _, name in pairs(def.stats.eat_nodes) do
+			for _, name in pairs(self.stats.eat_nodes) do
 				if node and node.name == name then
 					self.eat_node = node_pos
 					break
@@ -178,7 +169,7 @@ local function change_mode(self, new_mode)
 		end
 
 		-- change direction if required
-		if previous_mode == "follow" or (def.modes[self.mode] and def.modes[self.mode].change_direction_on_mode_change == true) then	-- the direction is changed when leaving follow mode otherwise the mob might keep walking in the same direction as before
+		if previous_mode == "follow" or (self.modes[self.mode] and self.modes[self.mode].change_direction_on_mode_change == true) then	-- the direction is changed when leaving follow mode otherwise the mob might keep walking in the same direction as before
 			change_direction(self)
 		else
 			change_direction(self, self.object:getyaw())
@@ -248,34 +239,31 @@ local function despawn_mob(me)
 	end
 end
 
-local function kill_mob(me, def)
-	if not def then
-		despawn_mob(me)
-	end
-	local pos = me:getpos()
-	me:setvelocity({x = 0, y = 0, z = 0})
-	me:set_properties({collisionbox = {x = 0, y = 0, z = 0}})
-	me:set_hp(0)
+local function kill_mob(self)
+	local pos = self.object:getpos()
+	self.object:setvelocity({x = 0, y = 0, z = 0})
+	self.object:set_properties({collisionbox = {x = 0, y = 0, z = 0}})
+	self.object:set_hp(0)
 
-	if def.sounds and def.sounds.on_death then
-		local death_snd = def.sounds.on_death
+	if self.sounds and self.sounds.on_death then
+		local death_snd = self.sounds.on_death
 		core.sound_play(death_snd.name, {pos = pos, max_hear_distance = death_snd.distance or 5, gain = death_snd.gain or 1})
 	end
 
-	if def.model.animations.death then
-		local dur = def.model.animations.death.duration or 0.5
-		update_animation(me, def.model.animations["death"])
+	if self.model.animations.death then
+		local dur = self.model.animations.death.duration or 0.5
+		update_animation(self.object, self.model.animations["death"])
 		core.after(dur, function()
-			despawn_mob(me)
+			despawn_mob(self.object)
 		end)
 	else
-		me:remove()
+		self.object:remove()
 	end
-	if def.drops then
-		if type(def.drops) == "function" then
-			def.drops(me:get_luaentity())
-		elseif type(def.drops) == "table" then
-			animals.dropItems(pos, def.drops)
+	if self.drops then
+		if type(self.drops) == "function" then
+			self.drops(self.object:get_luaentity())
+		elseif type(self.drops) == "table" then
+			animals.dropItems(pos, self.drops)
 		end
 	end
 end
@@ -304,15 +292,14 @@ end
 
 local function on_damage(self, hp)
 	local me = self.object
-	local def = core.registered_entities[self.mob_name]
 	hp = hp or me:get_hp()
 
 	if hp <= 0 then
-		kill_mob(me, def)
+		kill_mob(self)
 	else
 		on_hit(me) -- red flashing
-		if def.sounds and def.sounds.on_damage then
-			local dmg_snd = def.sounds.on_damage
+		if self.sounds and self.sounds.on_damage then
+			local dmg_snd = self.sounds.on_damage
 			core.sound_play(dmg_snd.name, {pos = me:getpos(), max_hear_distance = dmg_snd.distance or 5, gain = dmg_snd.gain or 1})
 		end
 	end
@@ -372,18 +359,18 @@ spawn_particles = function(pos, velocity, texture_str)
 	})
 end
 
-local function tame(self, def, owner_name)
+local function tame(self, owner_name)
 	self.tamed = true
 	self.owner_name = owner_name
-	self.breedtimer = def.stats.breedtime
-	self.lovetimer = def.stats.lovetime
+	self.breedtimer = self.stats.breedtime
+	self.lovetimer = self.stats.lovetime
 	local pos = self.object:getpos()
 	spawn_particles({ x = pos.x, y = pos.y + 1.0, z = pos.z }, { x = 0, y = 1.0, z = 0 }, "heart.png")
 	return true
 end
 
-local function breed(self, def)
-	if self.breedtimer >= def.stats.breedtime then
+local function breed(self)
+	if self.breedtimer >= self.stats.breedtime then
 		self.lovetimer = 0
 		return true
 	end
@@ -409,18 +396,13 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 end
 
 animals.on_rightclick = function(self, clicker)
-	local def = core.registered_entities[self.mob_name]
-	if not def then
-		animals.throwError("Can't load creature-definition")
-		return
-	end
 	local item = clicker:get_wielded_item()
 	if item then
 		local name = item:get_name()
 		if name then
 			if not self.tamed then
-				if def.stats.tame_items and check_wielded(name, def.stats.tame_items) then
-					if tame(self, def, clicker:get_player_name()) then
+				if self.stats.tame_items and check_wielded(name, self.stats.tame_items) then
+					if tame(self, clicker:get_player_name()) then
 						item:take_item()
 						if not core.setting_getbool("creative_mode") then
 							clicker:set_wielded_item(item)
@@ -428,8 +410,8 @@ animals.on_rightclick = function(self, clicker)
 					end
 				end
 			else
-				if def.stats.breed_items and check_wielded(name, def.stats.breed_items) then
-					if breed(self, def) then
+				if self.stats.breed_items and check_wielded(name, self.stats.breed_items) then
+					if breed(self) then
 						item:take_item()
 						if not core.setting_getbool("creative_mode") then
 							clicker:set_wielded_item(item)
@@ -442,18 +424,12 @@ animals.on_rightclick = function(self, clicker)
 end
 
 animals.on_step = function(self, dtime)
-	local def = core.registered_entities[self.mob_name]
-	if not def then
-		animals.throwError("Can't load creature-definition")
-		return
-	end
-
 	-- timer updates
 	self.lifetimer = self.lifetimer + dtime
-	if def.stats.breed_items and self.breedtimer < def.stats.breedtime then
+	if self.stats.breed_items and self.breedtimer < self.stats.breedtime then
 		self.breedtimer = self.breedtimer + dtime
 	end
-	if def.stats.breed_items and self.lovetimer < def.stats.lovetime then
+	if self.stats.breed_items and self.lovetimer < self.stats.lovetime then
 		self.lovetimer = self.lovetimer + dtime
 	end
 
@@ -465,7 +441,7 @@ animals.on_step = function(self, dtime)
 	self.swimtimer = self.swimtimer + dtime
 
 	-- main
-	if self.lifetimer > def.stats.lifetime then
+	if self.lifetimer > self.stats.lifetime then
 		self.lifetimer = 0
 		if self.tamed == false then
 			despawn_mob(self.object)
@@ -473,22 +449,22 @@ animals.on_step = function(self, dtime)
 	end
 
 	-- breeding
-	if def.stats.breed_items then
-		if self.lovetimer < def.stats.lovetime then
+	if self.stats.breed_items then
+		if self.lovetimer < self.stats.lovetime then
 			self.breedtimer = 0
-			local mates = animals.findTarget(self.object, self.object:getpos(), 4, self.object:get_luaentity().mob_name, self.owner_name, false)
+			local mates = animals.findTarget(self.object, self.object:getpos(), 4, self.mob_name, self.owner_name, false)
 			if #mates >= 1 then
 				for _, mate in ipairs(mates) do
 					local mate_entity = mate:get_luaentity()
-					if mate_entity.lovetimer < def.stats.lovetime then
-						local child = core.add_entity(self.object:getpos(), self.object:get_luaentity().mob_name)
+					if mate_entity.lovetimer < self.stats.lovetime then
+						local child = core.add_entity(self.object:getpos(), self.mob_name)
 						local entity = child:get_luaentity()
 						entity.tamed = true
 						entity.owner_name = self.owner_name
 						entity.breedtimer = 0
-						entity.lovetimer = def.stats.lovetime
+						entity.lovetimer = self.stats.lovetime
 						self.lovetimer = self.stats.lovetime
-						mate_entity.lovetimer = def.stats.lovetime
+						mate_entity.lovetimer = self.stats.lovetime
 					end
 				end
 			end
@@ -517,8 +493,8 @@ animals.on_step = function(self, dtime)
 			self.object:setvelocity({x = vel.x, y = 0.75, z = vel.z})
 
 			-- play swimming sounds
-			if def.sounds and def.sounds.swim then
-				local swim_snd = def.sounds.swim
+			if self.sounds and self.sounds.swim then
+				local swim_snd = self.sounds.swim
 				minetest.sound_play(swim_snd.name, {pos = self.object:getpos(), gain = swim_snd.gain or 1, max_hear_distance = swim_snd.distance or 10})
 			end
 			spawn_particles(self.object:getpos(), vel, "bubble.png")
@@ -531,12 +507,12 @@ animals.on_step = function(self, dtime)
 	end
 
 	-- change mode randomly
-	if self.mode == "" or (self.mode ~= "follow" and self.modetimer > def.modes[self.mode].duration and def.modes[self.mode].duration > 0) then
+	if self.mode == "" or (self.mode ~= "follow" and self.modetimer > self.modes[self.mode].duration and self.modes[self.mode].duration > 0) then
 		change_mode(self)
 	end
 
 	-- change yaw randomly
-	if self.mode ~= "follow" and def.modes[self.mode].update_yaw and self.yawtimer > def.modes[self.mode].update_yaw then
+	if self.mode ~= "follow" and self.modes[self.mode].update_yaw and self.yawtimer > self.modes[self.mode].update_yaw then
 		self.yawtimer = 0
 		change_direction(self)
 	end
@@ -562,10 +538,10 @@ animals.on_step = function(self, dtime)
 		end
 
 		-- look for a target to follow
-		if def.stats.follow_items then
+		if self.stats.follow_items then
 			if self.searchtimer > 0.6 then
 				self.searchtimer = 0
-				local targets = animals.findTarget(self.object, self.object:getpos(), def.stats.follow_radius, "player", self.owner_name, false)
+				local targets = animals.findTarget(self.object, self.object:getpos(), self.stats.follow_radius, "player", self.owner_name, false)
 				local target = nil
 				if #targets > 1 then
 					target = targets[math.random(1, #targets)]
@@ -574,7 +550,7 @@ animals.on_step = function(self, dtime)
 				end
 				if target ~= nil then
 					local item_name = target:get_wielded_item():get_name()
-					if item_name and check_wielded(item_name, def.stats.follow_items) == true then
+					if item_name and check_wielded(item_name, self.stats.follow_items) == true then
 						self.target = target
 						self.autofollowing = true
 						change_mode(self, "follow")
@@ -600,7 +576,7 @@ animals.on_step = function(self, dtime)
 			-- stop following if autofollowing and the target is out of range or is no longer wielding the correct item
 			if self.autofollowing == true then
 				local item_name = self.target:get_wielded_item():get_name()
-				if distance > def.stats.follow_radius or (item_name and check_wielded(item_name, def.stats.follow_items) == false) then
+				if distance > self.stats.follow_radius or (item_name and check_wielded(item_name, self.stats.follow_items) == false) then
 					change_mode(self)
 				end
 			end
@@ -613,21 +589,21 @@ animals.on_step = function(self, dtime)
 				-- update the animation
 				local speed = get_target_speed(self)
 				if speed > 0 then
-					local anim_def = def.model.animations["follow"]
-					if self.in_water and def.model.animations["swim"] then
-						anim_def = def.model.animations["swim"]
+					local anim_def = self.model.animations["follow"]
+					if self.in_water and self.model.animations["swim"] then
+						anim_def = self.model.animations["swim"]
 					end
 					update_animation(self.object, anim_def)
 				else
-					update_animation(self.object, def.model.animations["idle"])
+					update_animation(self.object, self.model.animations["idle"])
 				end
 			end
 		end
 	end
 
 --	-- Random sounds
---	if def.sounds and def.sounds.random[self.mode] then
---		local rnd_sound = def.sounds.random[self.mode]
+--	if self.sounds and self.sounds.random[self.mode] then
+--		local rnd_sound = self.sounds.random[self.mode]
 --		if not self.snd_rnd_time then
 --			self.snd_rnd_time = math.random((rnd_sound.time_min or 5), (rnd_sound.time_max or 35))
 --		end

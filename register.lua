@@ -37,6 +37,7 @@ local function get_entity_def(mob_def)
 		collide_with_objects = mob_def.model.collide_with_objects or true,
 		collisionbox = mob_def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
 
+		mob_name = mob_def.name,
 		stats = mob_def.stats,
 		model = mob_def.model,
 		sounds = mob_def.sounds,
@@ -103,7 +104,6 @@ local function get_entity_def(mob_def)
 		end
 
 		-- create fields
-		self.mob_name = mob_def.name
 		self.hp = staticdata_table.hp or mob_def.stats.hp
 		self.mode = ""	-- initialising with a blank mode will cause the mob to choose a random mode in the first tick
 		self.tamed = staticdata_table.tamed or false
