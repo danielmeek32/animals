@@ -57,12 +57,12 @@ local function translate_def(def)
 		if def.stats.panic_speed then
 			new.moving_speed = def.stats.panic_speed
 		end
-		new.update_yaw = 0.7
+		new.update_yaw = 0.75
 		new_def.modes["_run"] = new
 		local new_anim = def.model.animations.panic
 		if not new_anim then
 			new_anim = table.copy(def.model.animations.walk)
-			new_anim.speed = new_anim.speed * 2
+			new_anim.speed = new_anim.speed * (new.moving_speed / new_def.modes["walk"].moving_speed)
 		end
 		new_def.model.animations._run = new_anim
 	end
@@ -92,14 +92,27 @@ local function translate_def(def)
 	end
 
 	new_def.on_activate = function(self, staticdata)
+		self.get_mode = function(self)
+			return self.mode
+		end
+		self.set_mode = function(self, new_mode)
+			animals.change_mode(self, new_mode)	-- TODO: this shouldn't be in the animals namespace
+		end
+		self.choose_random_mode = function(self)
+			animals.change_mode(self)	-- TODO: this shouldn't be in the animals namespace
+		end
+		self.follow = function(self, target)
+			self.target = target
+			self.autofollowing = false
+			animals.change_mode(self, "follow")
+		end
+
 		self.mob_name = def.name
 		self.hp = def.stats.hp
 		self.mode = "idle"
-		self.stunned = false
 		self.tamed = false
 		self.owner_name = ""
 		self.target = nil
-		self.in_water = false
 		self.autofollowing = false
 
 		-- Timers
@@ -112,12 +125,11 @@ local function translate_def(def)
 			self.lovetimer = 0
 		end
 
-		self.nodetimer = 2
-		self.modetimer = math.random()
+		self.modetimer = 0
 		self.yawtimer = 0
 		self.searchtimer = 0
 		self.followtimer = 0
-		self.soundtimer = math.random()
+		self.soundtimer = 0
 		self.swimtimer = 2
 
 		-- Other things
@@ -130,17 +142,11 @@ local function translate_def(def)
 			end
 		end
 
-		if self.mode == "follow" and self.target == nil then
-			self.autofollowing = false
-			self.mode = "idle"
-		end
+		self.in_water = false
+		self.object:setacceleration({x = 0, y = -15, z = 0})	-- set acceleration for on land
 
-		if not self.in_water then
-			self.object:setacceleration({x = 0, y = -15, z = 0})
-		end
-
+		-- TODO: consider moving hp to clientside
 		self.object:set_hp(self.hp)
-
 		-- immortal is needed to disable clientside smokepuff
 		self.object:set_armor_groups({fleshy = 100, immortal = 1})
 
@@ -148,6 +154,9 @@ local function translate_def(def)
 		if def.on_activate then
 			def.on_activate(self, staticdata)
 		end
+
+		-- set mode (will set up animation and other mode parameters that aren't saved)
+		animals.change_mode(self, self.mode)	-- TODO: this shouldn't be in the animals namespace
 	end
 
 	new_def.on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
@@ -174,15 +183,9 @@ local function translate_def(def)
 		animals.on_step(self, dtime)
 	end
 
-	new_def.on_follow_start = function(self)
-		if def.on_follow_start then
-			def.on_follow_start(self)
-		end
-	end
-
-	new_def.on_follow_end = function(self)
-		if def.on_follow_end then
-			def.on_follow_end(self)
+	new_def.on_mode_change = function(self, new_mode)
+		if def.on_mode_change then
+			def.on_mode_change(self, new_mode)
 		end
 	end
 

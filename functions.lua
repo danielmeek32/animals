@@ -22,27 +22,209 @@
 -- 3. This notice may not be removed or altered from any source distribution.
 --
 
--- Localizations
+-- TODO: which functions should be local?
+-- TODO: sounds
 
-local function knockback(self_or_object, dir, old_dir, strengh)
-	local object = self_or_object
-	if self_or_object.mob_name then
-		object = self_or_object.object
-	end
-	object:set_properties({automatic_face_movement_dir = false})
-	object:setvelocity(vector.add(old_dir, {x = dir.x * strengh, y = 3.5, z = dir.z * strengh}))
-	old_dir.y = 0
-	core.after(0.4, function()
-		object:set_properties({automatic_face_movement_dir = -90.0})
-		object:setvelocity(old_dir)
-		self_or_object.falltimer = nil
-		if self_or_object.stunned == true then
-			self_or_object.stunned = false
-			self_or_object.mode = "_run"
-			self_or_object.modetimer = 0
-		end
-	end)
+local update_animation
+
+local function get_def(self)
+	return minetest.registered_entities[self.mob_name]
 end
+
+-- get the correct speed for the current mode
+local function get_target_speed(self)
+	local def = get_def(self)
+	if self.mode == "follow" then
+		if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) < def.stats.follow_stop_distance then
+			return 0
+		else
+			return def.stats.follow_speed
+		end
+	else
+		return def.modes[self.mode].moving_speed or 0
+	end
+end
+
+-- change the direction
+-- If new_direction is nil, randomly chooses a new direction for the mob and sets it as the current direction.
+-- If new_direction is non-nil, sets the current direction to new_direction. If the current mode requests that the mob is moving, it will begin moving at the mode's speed in the new direction. If the current mode requests that the mob is stationary, it will remain stationary while visually changing the direction that it is facing. Note that the mob's actual speed is ignored; only the speed according to the current mode is used.
+local function change_direction(self, new_direction)
+	local def = get_def(self)
+
+	if new_direction == nil then
+		-- randomly choose a new direction
+		local selected_direction = math.random() * math.pi * 2
+		change_direction(self, selected_direction)
+	else
+		local speed = get_target_speed(self)
+
+		-- update the mob
+		if speed > 0 then
+			-- move in the new direction
+			self.object:setvelocity({x = -math.sin(new_direction) * speed, y = self.object:getvelocity().y, z = math.cos(new_direction) * speed})
+		else
+			-- the mob is not supposed to be moving, so stop it and set the yaw manually (allows the displayed direction to change even when the mob is stationary)
+			self.object:setvelocity({x = 0, y = self.object:getvelocity().y, z = 0})
+			self.object:setyaw(new_direction)
+		end
+	end
+end
+
+-- change the mode
+-- If new_mode is nil, randomly selects a mode that is valid in the current mob state and sets it as the current mode.
+-- If new_mode is non-nil, sets the current mode to new_mode. new_mode must refer to a mode that exists, and should be valid for the current mov state.
+local function change_mode(self, new_mode)
+	local def = get_def(self)
+
+	if new_mode == nil then
+		local selected_mode
+
+		local valid = false
+		while valid == false do
+			-- randomly choose a new mode
+			selected_mode = animals.rnd(def.modes)
+
+			-- check that the new mode is valid
+			valid = true
+			if selected_mode == "eat" then
+				if self.in_water == true then
+					valid = false
+				else
+					local node_pos = self.object:getpos()
+					node_pos.y = node_pos.y - 0.5
+					local node = minetest.get_node_or_nil(node_pos)
+					valid = false
+					for _, name in pairs(def.stats.eat_nodes) do
+						if node and name == node.name then
+							valid = true
+							break
+						end
+					end
+				end
+			end
+		end
+
+		-- change the mode to the selected mode
+		change_mode(self, selected_mode)
+	else
+		-- set mode to requested mode
+		local previous_mode = self.mode
+		self.mode = new_mode
+
+		-- reset timers
+		self.yawtimer = 0
+		self.followtimer = 0.6 + 0.1	-- TODO: 0.6 is the followtimer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
+		-- TODO: sound timer
+
+		-- set speed
+		local speed = get_target_speed(self)
+		if speed > 0 then
+			-- get current direction
+			local direction = self.object:getyaw()
+			-- move in the current direction at the calculated speed
+			self.object:setvelocity({x = -math.sin(direction) * speed, y = self.object:getvelocity().y, z = math.cos(direction) * speed})
+		else
+			-- stop moving
+			self.object:setvelocity({x = 0, y = self.object:getvelocity().y, z = 0})
+		end
+
+		-- set animation
+		local anim_def = def.model.animations[self.mode]
+		if self.in_water and def.model.animations["swim"] then
+			anim_def = def.model.animations["swim"]
+		end
+		update_animation(self.object, anim_def)
+
+		-- update the eaten node
+		if self.eat_node then
+			-- get the node
+			local node = minetest.get_node_or_nil(self.eat_node)
+
+			-- determine the correct replacement node
+			local node_def = minetest.registered_nodes[node.name]
+			local replacement_name = node.name
+			if node_def then
+				 if node_def.drop and type(node_def.drop) == "string" then
+					 replacement_name = node_def.drop
+				 elseif not node_def.walkable then
+					 replacement_name = "air"
+				 end
+			end
+
+			-- replace the node
+			if replacement_name and replacement_name ~= node.name and minetest.registered_nodes[replacement_name] then
+				minetest.set_node(self.eat_node, {name = replacement_name})
+				if node_def.sounds and node_def.sounds.dug then
+					minetest.sound_play(node_def.sounds.dug, {pos = self.eat_node, max_hear_distance = 5, gain = 1})
+				end
+			end
+
+			self.eat_node = nil
+			self.on_eat(self)	-- call the on_eat callback
+		end
+
+		-- get the node which will be eaten when the mode changes again
+		if self.mode == "eat" then
+			local node_pos = self.object:getpos()
+			node_pos.y = node_pos.y - 0.5
+			local node = minetest.get_node_or_nil(node_pos)
+			for _, name in pairs(def.stats.eat_nodes) do
+				if node and node.name == name then
+					self.eat_node = node_pos
+					break
+				end
+			end
+		end
+
+		-- change direction if required
+		if previous_mode == "follow" or (def.modes[self.mode] and def.modes[self.mode].change_direction_on_mode_change == true) then	-- the direction is changed when leaving follow mode otherwise the mob might keep walking in the same direction as before
+			change_direction(self)
+		else
+			change_direction(self, self.object:getyaw())
+		end
+
+		-- call mode change callback
+		self.on_mode_change(self, self.mode)
+	end
+end
+
+animals.change_mode = change_mode	-- TODO: this shouldn't be in the animals namespace
+
+-- calculate a polar direction from a direction vector
+-- The y component is ignored and the direction is calculated using the x and z components as if the vector was two-dimensional.
+local function get_polar_direction(direction)
+	if direction.x == 0 then
+		if direction.z > 0 then
+			return 0
+		elseif direction.z < 0 then
+			return math.pi
+		else
+			return 0
+		end
+	elseif direction.z == 0 then
+		if direction.x > 0 then
+			return math.pi * 1.5
+		elseif direction.x < 0 then
+			return math.pi * 0.5
+		else
+			return 0
+		end
+	else
+		if direction.x < 0 and direction.z > 0 then
+			return math.atan(math.abs(direction.x) / math.abs(direction.z))
+		elseif direction.x < 0 and direction.z < 0 then
+			return math.atan(math.abs(direction.z) / math.abs(direction.x)) + math.pi * 0.5
+		elseif direction.x > 0 and direction.z < 0 then
+			return math.atan(math.abs(direction.x) / math.abs(direction.z)) + math.pi
+		elseif direction.x > 0 and direction.z > 0 then
+			return math.atan(math.abs(direction.z) / math.abs(direction.x)) + math.pi * 1.5
+		else
+			return 0
+		end
+	end
+end
+
+--
 
 local function on_hit(me)
 	core.after(0.1, function()
@@ -53,11 +235,7 @@ local function on_hit(me)
 	end)
 end
 
-local function has_moved(pos1, pos2)
-	return not animals.comparePos(pos1, pos2)
-end
-
-local function update_animation(obj_ref, anim_def)
+update_animation = function(obj_ref, anim_def)
 	if anim_def and obj_ref then
 		obj_ref:set_animation({x = anim_def.start, y = anim_def.stop}, anim_def.speed, 0, anim_def.loop)
 	end
@@ -129,7 +307,6 @@ local function on_damage(self, hp)
 	hp = hp or me:get_hp()
 
 	if hp <= 0 then
-		self.stunned = true
 		kill_mob(me, def)
 	else
 		on_hit(me) -- red flashing
@@ -217,21 +394,12 @@ end
 -- --
 
 animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
-	if self.stunned == true then
-		return
-	end
-
-	local me = self.object
-	local mypos = me:getpos()
-
-	change_hp(self, calc_punch_damage(me, time_from_last_punch, tool_capabilities) * -1)
+	change_hp(self, calc_punch_damage(self.object, time_from_last_punch, tool_capabilities) * -1)
 	if puncher then
-		if time_from_last_punch >= 0.45 and self.stunned == false then
-			local v = me:getvelocity()
-			v.y = 0
-			me:setacceleration({x = 0, y = -15, z = 0})
-			knockback(self, dir, v, 5)
-			self.stunned = true
+		if time_from_last_punch >= 0.5 then
+			local velocity = self.object:getvelocity()
+			self.object:setvelocity({x = velocity.x, y = velocity.y + 5.0, z = velocity.z})
+			change_mode(self, "_run")
 
 			-- add wearout to weapons/tools
 			add_wearout(puncher, tool_capabilities)
@@ -288,7 +456,6 @@ animals.on_step = function(self, dtime)
 		self.lovetimer = self.lovetimer + dtime
 	end
 
-	self.nodetimer = self.nodetimer + dtime
 	self.modetimer = self.modetimer + dtime
 	self.yawtimer = self.yawtimer + dtime
 	self.searchtimer = self.searchtimer + dtime
@@ -297,13 +464,9 @@ animals.on_step = function(self, dtime)
 	self.swimtimer = self.swimtimer + dtime
 
 	-- main
-	if self.stunned == true then
-		return
-	end
-
-	if self.lifetimer > def.stats.lifetime and not (self.mode == "attack" and self.target) then
+	if self.lifetimer > def.stats.lifetime then
 		self.lifetimer = 0
-		if not self.tamed or (self.tamed and def.stats.dies_when_tamed) then
+		if self.tamed == false then
 			despawn_mob(self.object)
 		end
 	end
@@ -333,236 +496,148 @@ animals.on_step = function(self, dtime)
 		end
 	end
 
-	-- localize some things
-	local modes = def.modes
-	local current_mode = self.mode
-	local me = self.object
-	local moved = has_moved(me:getpos(), self.last_pos) or false
+	-- update current node
+	local node_pos = self.object:getpos()
+	node_pos.y = node_pos.y + 0.25
+	self.current_node = core.get_node_or_nil(node_pos)
 
-	if current_mode ~= "" then
-		-- update position and current node
-		if moved == true or not self.last_pos then
-			self.last_pos = me:getpos()
-			if self.nodetimer > 0.2 then
-				self.nodetimer = 0
-				local current_node = core.get_node_or_nil(me:getpos())
-				self.last_node = current_node
-			end
-		else
-			if (current_mode ~= "follow" and (modes[current_mode].moving_speed or 0) > 0) or current_mode == "follow" then
-				me:setvelocity({x = 0, y = me:getvelocity().y, z = 0})
-				if modes["idle"] and not current_mode == "follow" then
-					current_mode = "idle"
-					self.modetimer = 0
-				end
-			end
+	-- handle water
+	if self.current_node.name == "default:water_source" or self.current_node.name == "default:water_flowing" or self.current_node.name == "default:river_water_source" or self.current_node.name == "default:river_water_flowing" then
+		if self.in_water == false then
+			self.in_water = true
+			self.swimtimer = 0
+			self.object:setacceleration({x = 0, y = -0.25, z = 0})	-- set acceleration for in water
 		end
+		if self.swimtimer > 0.25 then
+			self.swimtimer = 0
 
-		-- follow target
-		if self.target and self.followtimer > 0.6 then
-			self.followtimer = 0
-			local my_pos = me:getpos()
-			local target_pos = self.target:getpos()
-			local dir = vector.direction(my_pos, target_pos)
-			dir.y = 0
-			dir = vector.normalize(dir)
-			local dist = vector.distance(my_pos, target_pos)
-			local name = self.target:get_wielded_item():get_name()
-			if name and check_wielded(name, def.stats.follow_items) == false then
-				dist = -1
+			-- set velocity to produce bobbing effect
+			local vel = self.object:getvelocity()
+			self.object:setvelocity({x = vel.x, y = 0.75, z = vel.z})
+
+			-- play swimming sounds
+			if def.sounds and def.sounds.swim then
+				local swim_snd = def.sounds.swim
+				minetest.sound_play(swim_snd.name, {pos = self.object:getpos(), gain = swim_snd.gain or 1, max_hear_distance = swim_snd.distance or 10})
 			end
-			if self.autofollowing == true and (dist == -1 or dist > def.stats.follow_radius) then
-				self.target = nil
-				self.autofollowing = false
-				self.mode = ""
-				self.on_follow_end(self)
-				current_mode = self.mode
-			else
-				if current_mode == "follow" then
-					local speed
-					if self.autofollowing == true and (dist < def.stats.follow_stop_distance) then
-						speed = 0
-						update_animation(me, def.model.animations["idle"])
-					else
-						speed = def.stats.follow_speed
-						local anim_def = def.model.animations["follow"]
-						if self.in_water and def.model.animations["swim"] then
-							anim_def = def.model.animations["swim"]
-						end
-						update_animation(me, anim_def)
-					end
-					me:setvelocity({x = dir.x * speed, y = me:getvelocity().y, z = dir.z * speed})
-				end
-			end
+			spawn_particles(self.object:getpos(), vel, "bubble.png")
 		end
-
-		-- search for a target to follow
-		if not self.target and def.stats.follow_items then
-			if self.searchtimer > 0.6 then
-				self.searchtimer = 0
-				local targets = animals.findTarget(me, me:getpos(), def.stats.follow_radius, "player", self.owner_name, false)
-				if #targets > 1 then
-					self.target = targets[math.random(1, #targets)]
-				elseif #targets == 1 then
-					self.target = targets[1]
-				end
-				if self.target then
-					local name = self.target:get_wielded_item():get_name()
-					if name and check_wielded(name, def.stats.follow_items) == true then
-						self.autofollowing = true
-						self.on_follow_start(self)
-						current_mode = "follow"
-					else
-						self.target = nil
-					end
-				end
-			end
-		end
-
-		-- check for a node to eat
-		if current_mode == "eat" and not self.eat_node then
-			local my_pos = me:getpos()
-			local node_pos = {x = my_pos.x, y = my_pos.y - 1.0, z = my_pos.z}
-			local node = core.get_node_or_nil(node_pos)
-			for _, name in pairs(def.stats.eat_nodes) do
-				if node and node.name == name then
-					self.eat_node = node_pos
-					break
-				end
-			end
-			if not self.eat_node then
-				current_mode = ""
-			end
-		end
-	end
-
-	-- change mode
-	if current_mode == "" or (current_mode ~= "follow" and self.modetimer > modes[current_mode].duration and modes[current_mode].duration > 0) then
-		self.modetimer = 0
-
-		local new_mode = animals.rnd(modes)
-		if new_mode == "eat" and self.in_water == true then
-			new_mode = "idle"
-		end
-		current_mode = new_mode
-
-		-- change eaten node when mode changes
-		if self.eat_node then
-			local node = core.get_node_or_nil(self.eat_node)
-			local node_name = node.name
-			local node_def = core.registered_nodes[node_name]
-			if node_def then
-				 if node_def.drop and type(node_def.drop) == "string" then
-					 node_name = node_def.drop
-				 elseif not node_def.walkable then
-					 node_name = "air"
-				 end
-			end
-			if node_name and node_name ~= node.name and core.registered_nodes[node_name] then
-				core.set_node(self.eat_node, {name = node_name})
-				local sounds = node_def.sounds
-				if sounds and sounds.dug then
-					core.sound_play(sounds.dug, {pos = self.eat_node, max_hear_distance = 5, gain = 1})
-				end
-			end
-			self.eat_node = nil
-			self.on_eat(self)
-		end
-	end
-
-	if current_mode ~= self.last_mode then	-- mode has changed
-		self.last_mode = current_mode
-
-		-- reset timers
-		self.yawtimer = 0
-		-- TODO: sound timer
-
-		-- change speed to match new mode
-		local moving_speed
-		if current_mode == "follow" then
-			moving_speed = def.stats.follow_speed
-		else
-			moving_speed = modes[current_mode].moving_speed or 0
-		end
+	else
 		if self.in_water == true then
-			moving_speed = moving_speed * 0.7
+			self.in_water = false
+			self.object:setacceleration({x = 0, y = -15, z = 0})	-- set acceleration for on land
 		end
-		if moving_speed > 0 then
-			-- get current yaw
-			local yaw = me:getyaw()
-			-- move in direction of current yaw at the calculated speed
-			me:setvelocity({x = math.sin(yaw) * moving_speed, y = me:getvelocity().y, z = math.cos(yaw) * moving_speed})
-		else
-			-- stop moving
-			me:setvelocity({x = 0, y = me:getvelocity().y, z = 0})
-		end
+	end
 
-		-- set animation
-		local anim_def = def.model.animations[current_mode]
-		if self.in_water and def.model.animations["swim"] then
-			anim_def = def.model.animations["swim"]
-		end
-		update_animation(me, anim_def)
+	-- change mode randomly
+	if self.mode == "" or (self.mode ~= "follow" and self.modetimer > def.modes[self.mode].duration and def.modes[self.mode].duration > 0) then
+		self.modetimer = 0
+		change_mode(self)
 	end
 
 	-- change yaw randomly
-	if current_mode ~= "follow" then
-		if modes[current_mode].update_yaw and self.yawtimer > modes[current_mode].update_yaw then
-			self.yawtimer = 0
-
-			-- generate a new yaw
-			local yaw = (math.random() * 360.0) / 180.0 * math.pi
-
-			-- change the direction
-			local moving_speed = modes[current_mode].moving_speed or 0
-			if moving_speed > 0 then
-				-- move in the new direction
-				me:setvelocity({x = math.sin(yaw) * moving_speed, y = me:getvelocity().y, z = math.cos(yaw) * moving_speed})
-			else
-				-- the mob is not moving, so set the yaw manually (allows the yaw to change even when the mob is stationary)
-				me:setyaw(yaw)
-			end
-		end
+	if self.mode ~= "follow" and def.modes[self.mode].update_yaw and self.yawtimer > def.modes[self.mode].update_yaw then
+		self.yawtimer = 0
+		change_direction(self)
 	end
 
-	--swim
-	if self.last_node then
-		if self.last_node.name == "default:water_source" then
-			if self.in_water == false or self.swimtimer > 0.8 then
-				self.swimtimer = 0
-				local vel = me:getvelocity()
-				me:setvelocity({x = vel.x, y = 0.75, z = vel.z})
-				me:setacceleration({x = 0, y = -0.5, z = 0})
-				self.in_water = true
-				-- play swimming sounds
-				if def.sounds and def.sounds.swim then
-					local swim_snd = def.sounds.swim
-					core.sound_play(swim_snd.name, {pos = me:getpos(), gain = swim_snd.gain or 1, max_hear_distance = swim_snd.distance or 10})
-				end
-				spawn_particles(me:getpos(), vel, "bubble.png")
-			end
+	-- determine if the mob is stuck
+	if get_target_speed(self) > 0 then
+		local velocity = self.object:getvelocity()
+		velocity.y = 0
+		local actual_speed = vector.length(velocity)
+		local target_speed = get_target_speed(self)
+		if actual_speed < target_speed - 0.1 then
+			self.stuck = true
 		else
-			if self.in_water == true then
-				self.in_water = false
-				me:setacceleration({x = 0, y = -15, z = 0})
+			self.stuck = false
+		end
+	end
+
+	-- perform actions for random modes
+	if self.mode ~= "follow" then
+		-- change direction if stuck
+		if self.stuck == true then
+			change_direction(self)
+		end
+
+		-- look for a target to follow
+		if def.stats.follow_items then
+			if self.searchtimer > 0.6 then
+				self.searchtimer = 0
+				local targets = animals.findTarget(self.object, self.object:getpos(), def.stats.follow_radius, "player", self.owner_name, false)
+				local target = nil
+				if #targets > 1 then
+					target = targets[math.random(1, #targets)]
+				elseif #targets == 1 then
+					target = targets[1]
+				end
+				if target ~= nil then
+					local item_name = target:get_wielded_item():get_name()
+					if item_name and check_wielded(item_name, def.stats.follow_items) == true then
+						self.target = target
+						self.autofollowing = true
+						change_mode(self, "follow")
+					end
+				end
 			end
 		end
 	end
 
-	-- Random sounds
-	if def.sounds and def.sounds.random[current_mode] then
-		local rnd_sound = def.sounds.random[current_mode]
-		if not self.snd_rnd_time then
-			self.snd_rnd_time = math.random((rnd_sound.time_min or 5), (rnd_sound.time_max or 35))
-		end
-		if rnd_sound and self.soundtimer > self.snd_rnd_time + math.random() then
-			self.soundtimer = 0
-			self.snd_rnd_time = nil
-			core.sound_play(rnd_sound.name, {pos = me:getpos(), gain = rnd_sound.gain or 1, max_hear_distance = rnd_sound.distance or 30})
+	-- perform actions for follow mode (this can't be an else clause because follow mode may have been enabled in the previous block)
+	if self.mode == "follow" then
+		if self.target and self.followtimer > 0.6 then
+			self.followtimer = 0
+
+			-- get the distance and direction to the target
+			local my_pos = self.object:getpos()
+			local target_pos = self.target:getpos()
+			local direction = vector.direction(my_pos, target_pos)
+			direction.y = 0
+			direction = vector.normalize(direction)
+			local distance = vector.distance(my_pos, target_pos)
+
+			-- stop following if autofollowing and the target is out of range or is no longer wielding the correct item
+			if self.autofollowing == true then
+				local item_name = self.target:get_wielded_item():get_name()
+				if distance > def.stats.follow_radius or (item_name and check_wielded(item_name, def.stats.follow_items) == false) then
+					self.autofollowing = false
+					change_mode(self)
+				end
+			end
+
+			if self.mode == "follow" then	-- detects if the current mode was changed in the previous block
+				-- update the direction
+				local polar_direction = get_polar_direction(direction)
+				change_direction(self, polar_direction)
+
+				-- update the animation
+				local speed = get_target_speed(self)
+				if speed > 0 then
+					local anim_def = def.model.animations["follow"]
+					if self.in_water and def.model.animations["swim"] then
+						anim_def = def.model.animations["swim"]
+					end
+					update_animation(self.object, anim_def)
+				else
+					update_animation(self.object, def.model.animations["idle"])
+				end
+			end
 		end
 	end
 
-	self.mode = current_mode
+--	-- Random sounds
+--	if def.sounds and def.sounds.random[self.mode] then
+--		local rnd_sound = def.sounds.random[self.mode]
+--		if not self.snd_rnd_time then
+--			self.snd_rnd_time = math.random((rnd_sound.time_min or 5), (rnd_sound.time_max or 35))
+--		end
+--		if rnd_sound and self.soundtimer > self.snd_rnd_time + math.random() then
+--			self.soundtimer = 0
+--			self.snd_rnd_time = nil
+--			core.sound_play(rnd_sound.name, {pos = me:getpos(), gain = rnd_sound.gain or 1, max_hear_distance = rnd_sound.distance or 30})
+--		end
+--	end
 end
 
 animals.get_staticdata = function(self)
@@ -574,7 +649,6 @@ animals.get_staticdata = function(self)
 	return {
 		hp = self.object:get_hp(),
 		mode = mode,
-		stunned = self.stunned,
 		tamed = self.tamed,
 		owner_name = self.owner_name,
 

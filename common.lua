@@ -48,16 +48,6 @@ function animals.throwError(msg)
 	core.log("error", "#Animals: ERROR: " .. msg)
 end
 
-function animals.comparePos(pos1, pos2)
-	if not pos1 or not pos2 then
-		return false
-	end
-	if pos1.x == pos2.x and pos1.y == pos2.y and pos1.z == pos2.z then
-		return true
-	end
-	return false
-end
-
 function animals.findTarget(search_obj, pos, radius, target_type, owner_name, xray)
 	local mobs = {}
 	for _,obj in ipairs(core.get_objects_inside_radius(pos, radius)) do
