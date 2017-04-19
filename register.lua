@@ -25,16 +25,17 @@
 local function get_entity_def(mob_def)
 	local entity_def = {
 		physical = true,
-		visual = "mesh",
 		stepheight = 1.1,
-		automatic_face_movement_dir = mob_def.model.rotation or 0.0,
+		makes_footstep_sound = not mob_def.stats.silent,
 
+		visual = "mesh",
 		mesh = mob_def.model.mesh,
-		textures = mob_def.model.textures,
-		collisionbox = mob_def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
-		visual_size = mob_def.model.scale or {x = 1, y = 1},
 		backface_culling = true,
+		visual_size = mob_def.model.scale or {x = 1, y = 1},
+		textures = mob_def.model.textures,
+		automatic_face_movement_dir = mob_def.model.rotation or 0.0,
 		collide_with_objects = mob_def.model.collide_with_objects or true,
+		collisionbox = mob_def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
 
 		stats = mob_def.stats,
 		model = mob_def.model,
@@ -43,42 +44,36 @@ local function get_entity_def(mob_def)
 		drops = mob_def.drops,
 	}
 
-	-- insert special mode "_run" which is used when in panic
-	if mob_def.modes.walk then
-		local new = table.copy(entity_def.modes["walk"])
-		new.chance = 0
-		new.duration = 3
-		new.moving_speed = new.moving_speed * 2
-		if mob_def.stats.panic_speed then
-			new.moving_speed = mob_def.stats.panic_speed
+	-- insert special mode "_run" which is used after being hit
+	local run_mode = table.copy(mob_def.modes["walk"])
+	run_mode.chance = 0
+	run_mode.duration = 3
+	run_mode.moving_speed = mob_def.stats.panic_speed or run_mode.moving_speed * 2
+	run_mode.change_direction_on_mode_change = true
+	run_mode.update_yaw = 0.75
+	entity_def.modes["_run"] = run_mode
+	local run_animation = mob_def.model.animations.panic
+	if not run_animation then
+		run_animation = table.copy(mob_def.model.animations["walk"])
+		run_animation.speed = run_animation.speed * (run_mode.moving_speed / mob_def.modes["walk"].moving_speed)
+	end
+	entity_def.model.animations["_run"] = run_animation
+
+	-- add convenience callbacks for on_step
+
+	entity_def.on_mode_change = function(self, new_mode)
+		if mob_def.on_mode_change then
+			mob_def.on_mode_change(self, new_mode)
 		end
-		new.update_yaw = 0.75
-		entity_def.modes["_run"] = new
-		local new_anim = mob_def.model.animations.panic
-		if not new_anim then
-			new_anim = table.copy(mob_def.model.animations.walk)
-			new_anim.speed = new_anim.speed * (new.moving_speed / entity_def.modes["walk"].moving_speed)
-		end
-		entity_def.model.animations._run = new_anim
 	end
 
-	entity_def.makes_footstep_sound = not mob_def.stats.silent
-
-	entity_def.get_staticdata = function(self)
-		local main_table = animals.get_staticdata(self)
-		-- is own staticdata function defined? If so, merge results
-		if mob_def.get_staticdata then
-			local data = mob_def.get_staticdata(self)
-			if data and type(data) == "table" then
-				for key, value in pairs(data) do
-					main_table[key] = value
-				end
-			end
+	entity_def.on_eat = function(self)
+		if mob_def.on_eat then
+			mob_def.on_eat(self)
 		end
-
-		-- return data serialized
-		return core.serialize(main_table)
 	end
+
+	-- add functions
 
 	entity_def.on_activate = function(self, staticdata)
 		-- add api calls
@@ -147,6 +142,13 @@ local function get_entity_def(mob_def)
 		end
 	end
 
+	entity_def.on_step = function(self, dtime)
+		if mob_def.on_step and mob_def.on_step(self, dtime) == true then
+			return
+		end
+		animals.on_step(self, dtime)
+	end
+
 	entity_def.on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
 		if mob_def.on_punch and mob_def.on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir) == true then
 			return
@@ -164,23 +166,17 @@ local function get_entity_def(mob_def)
 		animals.on_rightclick(self, clicker)
 	end
 
-	entity_def.on_step = function(self, dtime)
-		if mob_def.on_step and mob_def.on_step(self, dtime) == true then
-			return
+	entity_def.get_staticdata = function(self)
+		local data = animals.get_staticdata(self)
+		if mob_def.get_staticdata then
+			local extra_data = mob_def.get_staticdata(self)
+			if extra_data and type(extra_data) == "table" then
+				for key, value in pairs(extra_data) do
+					data[key] = value
+				end
+			end
 		end
-		animals.on_step(self, dtime)
-	end
-
-	entity_def.on_mode_change = function(self, new_mode)
-		if mob_def.on_mode_change then
-			mob_def.on_mode_change(self, new_mode)
-		end
-	end
-
-	entity_def.on_eat = function(self)
-		if mob_def.on_eat then
-			mob_def.on_eat(self)
-		end
+		return minetest.serialize(data)
 	end
 
 	return entity_def
