@@ -601,7 +601,6 @@ animals.on_step = function(self, dtime)
 			if self.autofollowing == true then
 				local item_name = self.target:get_wielded_item():get_name()
 				if distance > def.stats.follow_radius or (item_name and check_wielded(item_name, def.stats.follow_items) == false) then
-					self.autofollowing = false
 					change_mode(self)
 				end
 			end

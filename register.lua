@@ -92,6 +92,7 @@ local function translate_def(def)
 	end
 
 	new_def.on_activate = function(self, staticdata)
+		-- add api calls
 		self.get_mode = function(self)
 			return self.mode
 		end
@@ -107,24 +108,34 @@ local function translate_def(def)
 			animals.change_mode(self, "follow")
 		end
 
+		-- load static data into a table
+		local staticdata_table = {}
+		if staticdata then
+			local table = minetest.deserialize(staticdata)
+			if table and type(table) == "table" then
+				staticdata_table = table
+			end
+		end
+
+		-- create fields
 		self.mob_name = def.name
-		self.hp = def.stats.hp
-		self.mode = "idle"
-		self.tamed = false
-		self.owner_name = ""
+		self.hp = staticdata_table.hp or def.stats.hp
+		self.mode = staticdata_table.mode or "idle"
+		self.tamed = staticdata_table.tamed or false
+		self.owner_name = staticdata_table.owner_name or ""
 		self.target = nil
 		self.autofollowing = false
 
-		-- Timers
-		self.lifetimer = 0
+		-- create timers
+		self.lifetimer = staticdata_table.lifetimer or 0
 		if def.stats.breed_items then
-			self.breedtimer = def.stats.breedtime
-			self.lovetimer = def.stats.lovetime
+			self.breedtimer = staticdata_table.breedtime or def.stats.breedtime
+			self.lovetimer = staticdata_table.lovetime or def.stats.lovetime
 		else
 			self.breedtimer = 0
 			self.lovetimer = 0
 		end
-
+		-- these timers are not saved in the static data
 		self.modetimer = 0
 		self.yawtimer = 0
 		self.searchtimer = 0
@@ -132,18 +143,9 @@ local function translate_def(def)
 		self.soundtimer = 0
 		self.swimtimer = 2
 
-		-- Other things
-		if staticdata then
-			local table = core.deserialize(staticdata)
-			if table and type(table) == "table" then
-				for key, value in pairs(table) do
-					self[tostring(key)] = value
-				end
-			end
-		end
-
+		-- set acceleration for on land (the mob will detect if it is in water in the first tick and respond appropriately)
 		self.in_water = false
-		self.object:setacceleration({x = 0, y = -15, z = 0})	-- set acceleration for on land
+		self.object:setacceleration({x = 0, y = -15, z = 0})
 
 		-- TODO: consider moving hp to clientside
 		self.object:set_hp(self.hp)
