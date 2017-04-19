@@ -31,10 +31,10 @@ local function translate_def(def)
 
 		mesh = def.model.mesh,
 		textures = def.model.textures,
-		collisionbox = def.model.collisionbox or {-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
+		collisionbox = def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
 		visual_size = def.model.scale or {x = 1, y = 1},
-		backface_culling = false,
-		collide_with_objects = def.model.collide_with_objects,
+		backface_culling = true,
+		collide_with_objects = def.model.collide_with_objects or true,
 
 		stats = def.stats,
 		model = def.model,
