@@ -104,7 +104,7 @@ local function get_entity_def(mob_def)
 
 		-- create fields
 		self.mob_name = mob_def.name
-		self.hp = staticdata_table.hp or def.stats.hp
+		self.hp = staticdata_table.hp or mob_def.stats.hp
 		self.mode = ""	-- initialising with a blank mode will cause the mob to choose a random mode in the first tick
 		self.tamed = staticdata_table.tamed or false
 		self.owner_name = staticdata_table.owner_name or ""
