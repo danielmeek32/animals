@@ -112,6 +112,7 @@ local function change_mode(self, new_mode)
 		self.mode = new_mode
 
 		-- reset timers
+		self.modetimer = 0
 		self.yawtimer = 0
 		self.followtimer = 0.6 + 0.1	-- TODO: 0.6 is the followtimer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
 		-- TODO: sound timer
@@ -531,7 +532,6 @@ animals.on_step = function(self, dtime)
 
 	-- change mode randomly
 	if self.mode == "" or (self.mode ~= "follow" and self.modetimer > def.modes[self.mode].duration and def.modes[self.mode].duration > 0) then
-		self.modetimer = 0
 		change_mode(self)
 	end
 
