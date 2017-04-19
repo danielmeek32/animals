@@ -120,7 +120,7 @@ local function translate_def(def)
 		-- create fields
 		self.mob_name = def.name
 		self.hp = staticdata_table.hp or def.stats.hp
-		self.mode = staticdata_table.mode or "idle"
+		self.mode = ""	-- initialising with a blank mode will cause the mob to choose a random mode in the first tick
 		self.tamed = staticdata_table.tamed or false
 		self.owner_name = staticdata_table.owner_name or ""
 		self.target = nil
@@ -156,9 +156,6 @@ local function translate_def(def)
 		if def.on_activate then
 			def.on_activate(self, staticdata)
 		end
-
-		-- set mode (will set up animation and other mode parameters that aren't saved)
-		animals.change_mode(self, self.mode)	-- TODO: this shouldn't be in the animals namespace
 	end
 
 	new_def.on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
