@@ -281,19 +281,20 @@ animals.on_step = function(self, dtime)
 
 	-- timer updates
 	self.lifetimer = self.lifetimer + dtime
-	self.nodetimer = self.nodetimer + dtime
-	self.swimtimer = self.swimtimer + dtime
-	self.yawtimer = self.yawtimer + dtime
-	self.modetimer = self.modetimer + dtime
-	self.soundtimer = self.soundtimer + dtime
-	self.followtimer = self.followtimer + dtime
-	self.searchtimer = self.searchtimer + dtime
 	if def.stats.breed_items and self.breedtimer < def.stats.breedtime then
 		self.breedtimer = self.breedtimer + dtime
 	end
 	if def.stats.breed_items and self.lovetimer < def.stats.lovetime then
 		self.lovetimer = self.lovetimer + dtime
 	end
+
+	self.nodetimer = self.nodetimer + dtime
+	self.modetimer = self.modetimer + dtime
+	self.yawtimer = self.yawtimer + dtime
+	self.searchtimer = self.searchtimer + dtime
+	self.followtimer = self.followtimer + dtime
+	self.soundtimer = self.soundtimer + dtime
+	self.swimtimer = self.swimtimer + dtime
 
 	-- main
 	if self.stunned == true then
@@ -564,22 +565,20 @@ animals.on_step = function(self, dtime)
 	self.mode = current_mode
 end
 
-
 animals.get_staticdata = function(self)
+	local mode = self.mode
+	if mode == "follow" then
+		mode = "idle"
+	end
+
 	return {
 		hp = self.object:get_hp(),
-		mode = self.mode,
+		mode = mode,
 		stunned = self.stunned,
 		tamed = self.tamed,
 		owner_name = self.owner_name,
-		in_water = self.in_water,
-		autofollowing = self.autofollowing,
 
 		lifetimer = self.lifetimer,
-		yawtimer = self.yawtimer,
-		modetimer = self.modetimer,
-		soundtimer = self.soundtimer,
 		breedtimer = self.breedtimer,
-		lovetimer = self.lovetimer,
 	}
 end

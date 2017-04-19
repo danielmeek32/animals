@@ -104,19 +104,21 @@ local function translate_def(def)
 
 		-- Timers
 		self.lifetimer = 0
-		self.nodetimer = 2
-		self.swimtimer = 2
-		self.yawtimer = 0
-		self.modetimer = math.random()
-		self.soundtimer = math.random()
-		self.followtimer = 0
-		self.searchtimer = 0
-		self.breedtimer = 0
-		self.lovetimer = 0
 		if def.stats.breed_items then
 			self.breedtimer = def.stats.breedtime
 			self.lovetimer = def.stats.lovetime
+		else
+			self.breedtimer = 0
+			self.lovetimer = 0
 		end
+
+		self.nodetimer = 2
+		self.modetimer = math.random()
+		self.yawtimer = 0
+		self.searchtimer = 0
+		self.followtimer = 0
+		self.soundtimer = math.random()
+		self.swimtimer = 2
 
 		-- Other things
 		if staticdata then
