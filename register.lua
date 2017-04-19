@@ -44,20 +44,21 @@ local function get_entity_def(mob_def)
 		drops = mob_def.drops,
 	}
 
-	-- insert special mode "_run" which is used after being hit
-	local run_mode = table.copy(mob_def.modes["walk"])
-	run_mode.chance = 0
-	run_mode.duration = 3
-	run_mode.moving_speed = mob_def.stats.panic_speed or run_mode.moving_speed * 2
-	run_mode.change_direction_on_mode_change = true
-	run_mode.update_yaw = 0.75
-	entity_def.modes["_run"] = run_mode
-	local run_animation = mob_def.model.animations.panic
-	if not run_animation then
-		run_animation = table.copy(mob_def.model.animations["walk"])
-		run_animation.speed = run_animation.speed * (run_mode.moving_speed / mob_def.modes["walk"].moving_speed)
+	-- create "panic" mode and animations if they don't already exist
+	if not entity_def.modes["panic"] then
+		local panic_mode = table.copy(entity_def.modes["walk"])
+		panic_mode.chance = 0
+		panic_mode.duration = 3
+		panic_mode.moving_speed = mob_def.stats.panic_speed or entity_def.modes["walk"].moving_speed * 2
+		panic_mode.change_direction_on_mode_change = true
+		panic_mode.update_yaw = 0.75
+		entity_def.modes["panic"] = panic_mode
 	end
-	entity_def.model.animations["_run"] = run_animation
+	if not entity_def.model.animations["panic"] then
+		local panic_animation = table.copy(entity_def.model.animations["walk"])
+		panic_animation.speed = panic_animation.speed * (entity_def.modes["panic"].moving_speed / entity_def.modes["walk"].moving_speed)
+		entity_def.model.animations["panic"] = panic_animation
+	end
 
 	-- add convenience callbacks for on_step
 

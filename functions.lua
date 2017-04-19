@@ -400,7 +400,7 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 		if time_from_last_punch >= 0.5 then
 			local velocity = self.object:getvelocity()
 			self.object:setvelocity({x = velocity.x, y = velocity.y + 5.0, z = velocity.z})
-			change_mode(self, "_run")
+			change_mode(self, "panic")
 
 			-- add wearout to weapons/tools
 			add_wearout(puncher, tool_capabilities)
