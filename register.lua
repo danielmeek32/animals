@@ -39,15 +39,10 @@ local function translate_def(def)
 		stats = def.stats,
 		model = def.model,
 		sounds = def.sounds,
-		modes = {},
+		modes = def.modes,
 		drops = def.drops,
 	}
 
-	-- Tanslate modes to better accessable format
-	for key, mode in pairs(def.modes) do
-		local name = tostring(key)
-		new_def.modes[name] = mode
-	end
 	-- insert special mode "_run" which is used when in panic
 	if def.modes.walk then
 		local new = table.copy(new_def.modes["walk"])
