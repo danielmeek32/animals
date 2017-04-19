@@ -22,53 +22,53 @@
 -- 3. This notice may not be removed or altered from any source distribution.
 --
 
-local function translate_def(def)
-	local new_def = {
+local function get_entity_def(mob_def)
+	local entity_def = {
 		physical = true,
 		visual = "mesh",
 		stepheight = 1.1,
-		automatic_face_movement_dir = def.model.rotation or 0.0,
+		automatic_face_movement_dir = mob_def.model.rotation or 0.0,
 
-		mesh = def.model.mesh,
-		textures = def.model.textures,
-		collisionbox = def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
-		visual_size = def.model.scale or {x = 1, y = 1},
+		mesh = mob_def.model.mesh,
+		textures = mob_def.model.textures,
+		collisionbox = mob_def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
+		visual_size = mob_def.model.scale or {x = 1, y = 1},
 		backface_culling = true,
-		collide_with_objects = def.model.collide_with_objects or true,
+		collide_with_objects = mob_def.model.collide_with_objects or true,
 
-		stats = def.stats,
-		model = def.model,
-		sounds = def.sounds,
-		modes = def.modes,
-		drops = def.drops,
+		stats = mob_def.stats,
+		model = mob_def.model,
+		sounds = mob_def.sounds,
+		modes = mob_def.modes,
+		drops = mob_def.drops,
 	}
 
 	-- insert special mode "_run" which is used when in panic
-	if def.modes.walk then
-		local new = table.copy(new_def.modes["walk"])
+	if mob_def.modes.walk then
+		local new = table.copy(entity_def.modes["walk"])
 		new.chance = 0
 		new.duration = 3
 		new.moving_speed = new.moving_speed * 2
-		if def.stats.panic_speed then
-			new.moving_speed = def.stats.panic_speed
+		if mob_def.stats.panic_speed then
+			new.moving_speed = mob_def.stats.panic_speed
 		end
 		new.update_yaw = 0.75
-		new_def.modes["_run"] = new
-		local new_anim = def.model.animations.panic
+		entity_def.modes["_run"] = new
+		local new_anim = mob_def.model.animations.panic
 		if not new_anim then
-			new_anim = table.copy(def.model.animations.walk)
-			new_anim.speed = new_anim.speed * (new.moving_speed / new_def.modes["walk"].moving_speed)
+			new_anim = table.copy(mob_def.model.animations.walk)
+			new_anim.speed = new_anim.speed * (new.moving_speed / entity_def.modes["walk"].moving_speed)
 		end
-		new_def.model.animations._run = new_anim
+		entity_def.model.animations._run = new_anim
 	end
 
-	new_def.makes_footstep_sound = not def.stats.silent
+	entity_def.makes_footstep_sound = not mob_def.stats.silent
 
-	new_def.get_staticdata = function(self)
+	entity_def.get_staticdata = function(self)
 		local main_table = animals.get_staticdata(self)
 		-- is own staticdata function defined? If so, merge results
-		if def.get_staticdata then
-			local data = def.get_staticdata(self)
+		if mob_def.get_staticdata then
+			local data = mob_def.get_staticdata(self)
 			if data and type(data) == "table" then
 				for key, value in pairs(data) do
 					main_table[key] = value
@@ -80,7 +80,7 @@ local function translate_def(def)
 		return core.serialize(main_table)
 	end
 
-	new_def.on_activate = function(self, staticdata)
+	entity_def.on_activate = function(self, staticdata)
 		-- add api calls
 		self.get_mode = function(self)
 			return self.mode
@@ -107,7 +107,7 @@ local function translate_def(def)
 		end
 
 		-- create fields
-		self.mob_name = def.name
+		self.mob_name = mob_def.name
 		self.hp = staticdata_table.hp or def.stats.hp
 		self.mode = ""	-- initialising with a blank mode will cause the mob to choose a random mode in the first tick
 		self.tamed = staticdata_table.tamed or false
@@ -117,9 +117,9 @@ local function translate_def(def)
 
 		-- create timers
 		self.lifetimer = staticdata_table.lifetimer or 0
-		if def.stats.breed_items then
-			self.breedtimer = staticdata_table.breedtime or def.stats.breedtime
-			self.lovetimer = staticdata_table.lovetime or def.stats.lovetime
+		if mob_def.stats.breed_items then
+			self.breedtimer = staticdata_table.breedtime or mob_def.stats.breedtime
+			self.lovetimer = staticdata_table.lovetime or mob_def.stats.lovetime
 		else
 			self.breedtimer = 0
 			self.lovetimer = 0
@@ -142,48 +142,48 @@ local function translate_def(def)
 		self.object:set_armor_groups({fleshy = 100, immortal = 1})
 
 		-- call custom on_activate if defined
-		if def.on_activate then
-			def.on_activate(self, staticdata)
+		if mob_def.on_activate then
+			mob_def.on_activate(self, staticdata)
 		end
 	end
 
-	new_def.on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
-		if def.on_punch and def.on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir) == true then
+	entity_def.on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
+		if mob_def.on_punch and mob_def.on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir) == true then
 			return
 		end
 		animals.on_punch(self, puncher, time_from_last_punch, tool_capabilities, dir)
 	end
 
-	new_def.on_rightclick = function(self, clicker)
+	entity_def.on_rightclick = function(self, clicker)
 		if self.tamed and clicker:get_player_name() ~= self.owner_name then
 			return
 		end
-		if def.on_rightclick and def.on_rightclick(self, clicker) == true then
+		if mob_def.on_rightclick and mob_def.on_rightclick(self, clicker) == true then
 			return
 		end
 		animals.on_rightclick(self, clicker)
 	end
 
-	new_def.on_step = function(self, dtime)
-		if def.on_step and def.on_step(self, dtime) == true then
+	entity_def.on_step = function(self, dtime)
+		if mob_def.on_step and mob_def.on_step(self, dtime) == true then
 			return
 		end
 		animals.on_step(self, dtime)
 	end
 
-	new_def.on_mode_change = function(self, new_mode)
-		if def.on_mode_change then
-			def.on_mode_change(self, new_mode)
+	entity_def.on_mode_change = function(self, new_mode)
+		if mob_def.on_mode_change then
+			mob_def.on_mode_change(self, new_mode)
 		end
 	end
 
-	new_def.on_eat = function(self)
-		if def.on_eat then
-			def.on_eat(self)
+	entity_def.on_eat = function(self)
+		if mob_def.on_eat then
+			mob_def.on_eat(self)
 		end
 	end
 
-	return new_def
+	return entity_def
 end
 
 local function in_range(min_max, value)
@@ -331,23 +331,21 @@ local function register_spawn(spawn_def)
 	return true
 end
 
-function animals.registerMob(def) -- returns true if successful
-	if not def or not def.name then
+function animals.registerMob(mob_def)
+	if not mob_def or not mob_def.name then
 		throw_error("Can't register mob. No name or Definition given.")
 		return false
 	end
 
-	local mob_def = translate_def(def)
-
-	core.register_entity(":" .. def.name, mob_def)
+	minetest.register_entity(":" .. mob_def.name, get_entity_def(mob_def))
 
 	-- register spawn
-	if def.spawning then
-		local spawn_def = def.spawning
-		spawn_def.mob_name = def.name
-		spawn_def.mob_size = def.model.collisionbox
+	if mob_def.spawning then
+		local spawn_def = mob_def.spawning
+		spawn_def.mob_name = mob_def.name
+		spawn_def.mob_size = mob_def.model.collisionbox
 		if register_spawn(spawn_def) ~= true then
-			throw_error("Couldn't register spawning for '" .. def.name .. "'")
+			throw_error("Couldn't register spawning for '" .. mob_def.name .. "'")
 		end
 	end
 
