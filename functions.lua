@@ -528,6 +528,8 @@ animals.on_step = function(self, dtime)
 		else
 			self.stuck = false
 		end
+	else
+		self.stuck = false
 	end
 
 	-- perform actions for random modes
