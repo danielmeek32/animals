@@ -114,8 +114,8 @@ local function get_entity_def(mob_def)
 		-- create timers
 		self.lifetimer = staticdata_table.lifetimer or 0
 		if mob_def.stats.breed_items then
-			self.breedtimer = staticdata_table.breedtime or mob_def.stats.breedtime
-			self.lovetimer = staticdata_table.lovetime or mob_def.stats.lovetime
+			self.breedtimer = staticdata_table.breedtimer or mob_def.stats.breedtime
+			self.lovetimer = mob_def.stats.lovetime
 		else
 			self.breedtimer = 0
 			self.lovetimer = 0
