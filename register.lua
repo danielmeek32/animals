@@ -26,7 +26,7 @@ local function translate_def(def)
 	local new_def = {
 		physical = true,
 		visual = "mesh",
-		stepheight = 0.6, -- ensure we get over slabs/stairs
+		stepheight = 1.1,
 		automatic_face_movement_dir = def.model.rotation or 0.0,
 
 		mesh = def.model.mesh,
@@ -60,12 +60,6 @@ local function translate_def(def)
 			new_anim.speed = new_anim.speed * (new.moving_speed / new_def.modes["walk"].moving_speed)
 		end
 		new_def.model.animations._run = new_anim
-	end
-
-	if def.stats.jump_height and type(def.stats.jump_height) == "number" then
-		if def.stats.jump_height > 0 then
-			new_def.stepheight = def.stats.jump_height + 0.1
-		end
 	end
 
 	new_def.makes_footstep_sound = not def.stats.silent
