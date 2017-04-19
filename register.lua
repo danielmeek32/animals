@@ -111,7 +111,6 @@ local function translate_def(def)
 		self.soundtimer = math.random()
 		self.followtimer = 0
 		self.searchtimer = 0
-		self.envtimer = 0
 		self.breedtimer = 0
 		self.lovetimer = 0
 		if def.stats.breed_items then

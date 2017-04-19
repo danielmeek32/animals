@@ -288,7 +288,6 @@ animals.on_step = function(self, dtime)
 	self.soundtimer = self.soundtimer + dtime
 	self.followtimer = self.followtimer + dtime
 	self.searchtimer = self.searchtimer + dtime
-	self.envtimer = self.envtimer + dtime
 	if def.stats.breed_items and self.breedtimer < def.stats.breedtime then
 		self.breedtimer = self.breedtimer + dtime
 	end
@@ -549,15 +548,6 @@ animals.on_step = function(self, dtime)
 		end
 	end
 
-	-- Add damage when drowning or in lava
-	if self.envtimer > 1 and self.last_node then
-		self.envtimer = 0
-		local name = self.last_node.name
-		if name == "fire:basic_flame" or name == "default:lava_source" then
-			change_hp(self, -4)
-		end
-	end
-
 	-- Random sounds
 	if def.sounds and def.sounds.random[current_mode] then
 		local rnd_sound = def.sounds.random[current_mode]
@@ -582,7 +572,6 @@ animals.get_staticdata = function(self)
 		stunned = self.stunned,
 		tamed = self.tamed,
 		owner_name = self.owner_name,
-		--dir = self.dir,
 		in_water = self.in_water,
 		autofollowing = self.autofollowing,
 
