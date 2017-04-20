@@ -596,14 +596,8 @@ animals.on_step = function(self, dtime)
 end
 
 animals.get_staticdata = function(self)
-	local mode = self.mode
-	if mode == "follow" then
-		mode = "idle"
-	end
-
 	return {
 		hp = self.object:get_hp(),
-		mode = mode,
 		tamed = self.tamed,
 		owner_name = self.owner_name,
 
