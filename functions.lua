@@ -134,27 +134,31 @@ local function change_mode(self, new_mode)
 			-- get the node
 			local node = minetest.get_node_or_nil(self.eat_node)
 
-			-- determine the correct replacement node
-			local node_def = minetest.registered_nodes[node.name]
-			local replacement_name = node.name
-			if node_def then
-				 if node_def.drop and type(node_def.drop) == "string" then
-					 replacement_name = node_def.drop
-				 elseif not node_def.walkable then
-					 replacement_name = "air"
-				 end
-			end
-
-			-- replace the node
-			if replacement_name and replacement_name ~= node.name and minetest.registered_nodes[replacement_name] then
-				minetest.set_node(self.eat_node, {name = replacement_name})
-				if node_def.sounds and node_def.sounds.dug then
-					minetest.sound_play(node_def.sounds.dug, {pos = self.eat_node, max_hear_distance = 5, gain = 1})
+			if node then
+				-- determine the correct replacement node
+				local node_def = minetest.registered_nodes[node.name]
+				local replacement_name = node.name
+				if node_def then
+					 if node_def.drop and type(node_def.drop) == "string" then
+						 replacement_name = node_def.drop
+					 elseif not node_def.walkable then
+						 replacement_name = "air"
+					 end
 				end
+
+				-- replace the node
+				if replacement_name and replacement_name ~= node.name and minetest.registered_nodes[replacement_name] then
+					minetest.set_node(self.eat_node, {name = replacement_name})
+					if node_def.sounds and node_def.sounds.dug then
+						minetest.sound_play(node_def.sounds.dug, {pos = self.eat_node, max_hear_distance = 5, gain = 1})
+					end
+				end
+
+				-- call the eat callback
+				self.on_eat(self, node.name)
 			end
 
 			self.eat_node = nil
-			self.on_eat(self)	-- call the on_eat callback
 		end
 
 		-- get the node which will be eaten when the mode changes again

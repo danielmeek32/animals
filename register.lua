@@ -77,9 +77,9 @@ local function get_entity_def(mob_def)
 		end
 	end
 
-	entity_def.on_eat = function(self)
+	entity_def.on_eat = function(self, node_name)
 		if mob_def.on_eat then
-			mob_def.on_eat(self)
+			mob_def.on_eat(self, node_name)
 		end
 	end
 
