@@ -61,7 +61,15 @@ local function get_entity_def(mob_def)
 		entity_def.model.animations["panic"] = panic_animation
 	end
 
-	-- add convenience callbacks for on_step
+	-- create "death" mode (overwriting any existing mode with the same)
+	local death_mode = {
+		chance = 0,
+		duration = mob_def.stats.death_duration,
+		moving_speed = 0,
+	}
+	entity_def.modes["death"] = death_mode
+
+	-- add convenience wrappers for mob callbacks
 
 	entity_def.on_mode_change = function(self, new_mode)
 		if mob_def.on_mode_change then
@@ -72,6 +80,12 @@ local function get_entity_def(mob_def)
 	entity_def.on_eat = function(self)
 		if mob_def.on_eat then
 			mob_def.on_eat(self)
+		end
+	end
+
+	entity_def.on_die = function(self)
+		if mob_def.on_die then
+			mob_def.on_die(self)
 		end
 	end
 
@@ -104,7 +118,6 @@ local function get_entity_def(mob_def)
 		end
 
 		-- create fields
-		self.hp = staticdata_table.hp or mob_def.stats.hp
 		self.mode = ""	-- initialising with a blank mode will cause the mob to choose a random mode in the first tick
 		self.tamed = staticdata_table.tamed or false
 		self.owner_name = staticdata_table.owner_name or ""
@@ -132,10 +145,8 @@ local function get_entity_def(mob_def)
 		self.in_water = false
 		self.object:setacceleration({x = 0, y = -15, z = 0})
 
-		-- TODO: consider moving hp to clientside
-		self.object:set_hp(self.hp)
-		-- immortal is needed to disable clientside smokepuff
-		self.object:set_armor_groups({fleshy = 100, immortal = 1})
+		self.object:set_hp(staticdata_table.hp or mob_def.stats.hp)
+		self.object:set_armor_groups({fleshy = 100, immortal = 1})	-- immortal is needed to disable automatic damage handling
 
 		-- call custom on_activate if defined
 		if mob_def.on_activate then

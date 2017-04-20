@@ -24,6 +24,8 @@
 
 -- TODO: which functions should be local?
 -- TODO: sounds
+-- TODO: finish adding api calls (e.g. is_tamed(), get_owner_name(), is_following(), get_target(), get_position(), play_sound(), etc.)
+-- TODO: spawning
 
 local update_animation
 
@@ -218,100 +220,9 @@ end
 
 --
 
-local function on_hit(me)
-	core.after(0.1, function()
-		me:settexturemod("^[colorize:#c4000099")
-	end)
-	core.after(0.5, function()
-		me:settexturemod("")
-	end)
-end
-
 update_animation = function(obj_ref, anim_def)
 	if anim_def and obj_ref then
 		obj_ref:set_animation({x = anim_def.start, y = anim_def.stop}, anim_def.speed, 0, anim_def.loop)
-	end
-end
-
-local function despawn_mob(me)
-	if me then
-		me:remove()
-	end
-end
-
-local function kill_mob(self)
-	local pos = self.object:getpos()
-	self.object:setvelocity({x = 0, y = 0, z = 0})
-	self.object:set_properties({collisionbox = {x = 0, y = 0, z = 0}})
-	self.object:set_hp(0)
-
-	if self.sounds and self.sounds.on_death then
-		local death_snd = self.sounds.on_death
-		core.sound_play(death_snd.name, {pos = pos, max_hear_distance = death_snd.distance or 5, gain = death_snd.gain or 1})
-	end
-
-	if self.model.animations.death then
-		local dur = self.model.animations.death.duration or 0.5
-		update_animation(self.object, self.model.animations["death"])
-		core.after(dur, function()
-			despawn_mob(self.object)
-		end)
-	else
-		self.object:remove()
-	end
-	if self.drops then
-		if type(self.drops) == "function" then
-			self.drops(self.object:get_luaentity())
-		elseif type(self.drops) == "table" then
-			animals.dropItems(pos, self.drops)
-		end
-	end
-end
-
-local function limit(value, min, max)
-	if value < min then
-		return min
-	end
-	if value > max then
-		return max
-	end
-	return value
-end
-
-local function calc_punch_damage(obj, actual_interval, tool_caps)
-	local damage = 0
-	if not tool_caps or not actual_interval then
-		return 0
-	end
-	local my_armor = obj:get_armor_groups() or {}
-	for group,_ in pairs(tool_caps.damage_groups) do
-		damage = damage + (tool_caps.damage_groups[group] or 0) * limit(actual_interval / tool_caps.full_punch_interval, 0.0, 1.0) * ((my_armor[group] or 0) / 100.0)
-	end
-	return damage or 0
-end
-
-local function on_damage(self, hp)
-	local me = self.object
-	hp = hp or me:get_hp()
-
-	if hp <= 0 then
-		kill_mob(self)
-	else
-		on_hit(me) -- red flashing
-		if self.sounds and self.sounds.on_damage then
-			local dmg_snd = self.sounds.on_damage
-			core.sound_play(dmg_snd.name, {pos = me:getpos(), max_hear_distance = dmg_snd.distance or 5, gain = dmg_snd.gain or 1})
-		end
-	end
-end
-
-local function change_hp(self, value)
-	local me = self.object
-	local hp = me:get_hp()
-	hp = hp + math.floor(value)
-	me:set_hp(hp)
-	if value < 0 then
-		on_damage(self, hp)
 	end
 end
 
@@ -322,21 +233,6 @@ local function check_wielded(wielded, item_list)
 		end
 	end
 	return false
-end
-
-local tool_uses = {0, 30, 110, 150, 280, 300, 500, 1000}
-local function add_wearout(player, tool_def)
-	if not core.setting_getbool("creative_mode") then
-		local item = player:get_wielded_item()
-		if tool_def and tool_def.damage_groups and tool_def.damage_groups.fleshy then
-			local uses = tool_uses[tool_def.damage_groups.fleshy] or 0
-			if uses > 0 then
-				local wear = 65535/uses
-				item:add_wear(wear)
-				player:set_wielded_item(item)
-			end
-		end
-	end
 end
 
 spawn_particles = function(pos, velocity, texture_str)
@@ -382,15 +278,93 @@ end
 -- --
 
 animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabilities, dir)
-	change_hp(self, calc_punch_damage(self.object, time_from_last_punch, tool_capabilities) * -1)
-	if puncher then
-		if time_from_last_punch >= 0.5 then
-			local velocity = self.object:getvelocity()
-			self.object:setvelocity({x = velocity.x, y = velocity.y + 5.0, z = velocity.z})
-			change_mode(self, "panic")
+	-- calculate damage (see minetest lua_api.txt)
+	local damage = 0
+	if tool_capabilities and time_from_last_punch then
+		local armor_groups = self.object:get_armor_groups()
+		for group_name in pairs(tool_capabilities.damage_groups) do
+			damage = damage + (tool_capabilities.damage_groups[group_name] or 0) * math.min(math.max(time_from_last_punch / tool_capabilities.full_punch_interval, 0.0), 1.0) * ((armor_groups[group_name] or 0) / 100.0)
+		end
+	end
 
-			-- add wearout to weapons/tools
-			add_wearout(puncher, tool_capabilities)
+	-- change hp
+	local hp = self.object:get_hp()
+	hp = hp - damage
+	hp = math.ceil(hp)	--make sure hp is an integer
+	self.object:set_hp(hp)
+
+	-- show damage/death
+	if hp > 0 then
+		-- make the mob jump into the air
+		local velocity = self.object:getvelocity()
+		self.object:setvelocity({x = velocity.x, y = velocity.y + 5.0, z = velocity.z})
+
+		-- change to panic mode
+		change_mode(self, "panic")
+
+		-- flash red
+		self.object:settexturemod("^[colorize:#C000007F")
+		minetest.after(0.5, function()
+			self.object:settexturemod("")
+		end)
+
+		-- play damage sound
+		if self.sounds and self.sounds.on_damage then
+			minetest.sound_play(self.sounds.on_damage.name, {pos = self.object:getpos(), max_hear_distance = self.sounds.on_damage.distance or 5, gain = self.sounds.on_damage.gain or 1})
+		end
+	else
+		-- change to death mode
+		change_mode(self, "death")
+
+		-- allow the mob to be passed through
+		self.object:set_properties({collisionbox = {x = 0, y = 0, z = 0}})
+
+		-- play death sound
+		if self.sounds and self.sounds.on_death then
+			minetest.sound_play(self.sounds.on_death.name, {pos = self.object:getpos(), max_hear_distance = self.sounds.on_death.distance or 5, gain = self.sounds.on_death.gain or 1})
+		end
+
+		-- remove the mob after the death duration
+		minetest.after(self.stats.death_duration, function()
+			self.object:remove()
+		end)
+
+		-- drop drops
+		if self.drops then
+			local drops
+			if type(self.drops) == "function" then
+				drops = self.drops(self)
+			elseif type(self.drops) == "table" then
+				drops = self.drops
+			end
+			animals.dropItems(self.object:getpos(), drops)
+		end
+
+		-- call die callback
+		self.on_die(self)
+	end
+
+	-- add wear to tools
+	if puncher then
+		if not minetest.setting_getbool("creative_mode") then
+			local item = puncher:get_wielded_item()
+			if item and tool_capabilities and tool_capabilities.damage_groups and tool_capabilities.damage_groups.fleshy then
+				-- get the maximum uses from the most efficient node group (since there's no uses field for entity damage groups)
+				local best_uses = 0
+				for name, value in pairs(tool_capabilities.groupcaps) do
+					local uses = value.uses * (3 ^ (value.maxlevel or 0))	-- see minetest lua_api.txt
+					if uses > best_uses then
+						best_uses = uses
+					end
+				end
+
+				-- calculate and apply wear
+				if best_uses > 0 then
+					local wear = 65536 / best_uses
+					item:add_wear(wear)
+					puncher:set_wielded_item(item)
+				end
+			end
 		end
 	end
 end
@@ -444,7 +418,7 @@ animals.on_step = function(self, dtime)
 	if self.lifetimer > self.stats.lifetime then
 		self.lifetimer = 0
 		if self.tamed == false then
-			despawn_mob(self.object)
+			self.object:remove()
 		end
 	end
 
