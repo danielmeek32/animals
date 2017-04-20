@@ -450,7 +450,7 @@ animals.on_step = function(self, dtime)
 	-- update current node
 	local node_pos = self.object:getpos()
 	node_pos.y = node_pos.y + 0.25
-	self.current_node = core.get_node_or_nil(node_pos)
+	self.current_node = minetest.get_node(node_pos)
 
 	-- handle water
 	if self.current_node.name == "default:water_source" or self.current_node.name == "default:water_flowing" or self.current_node.name == "default:river_water_source" or self.current_node.name == "default:river_water_flowing" then
