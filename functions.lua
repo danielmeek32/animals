@@ -531,7 +531,7 @@ animals.on_step = function(self, dtime)
 		if self.stats.follow_items then
 			if self.searchtimer > 0.6 then
 				self.searchtimer = 0
-				local targets = animals.findTarget(self.object, self.object:getpos(), self.stats.follow_radius, "player", self.owner_name, false)
+				local targets = animals.findTarget(self.object, self.object:getpos(), self.stats.follow_distance, "player", self.owner_name, false)
 				local target = nil
 				if #targets > 1 then
 					target = targets[math.random(1, #targets)]
@@ -566,7 +566,7 @@ animals.on_step = function(self, dtime)
 			-- stop following if autofollowing and the target is out of range or is no longer wielding the correct item
 			if self.autofollowing == true then
 				local item_name = self.target:get_wielded_item():get_name()
-				if distance > self.stats.follow_radius or (item_name and check_wielded(item_name, self.stats.follow_items) == false) then
+				if distance > self.stats.follow_distance or (item_name and check_wielded(item_name, self.stats.follow_items) == false) then
 					change_mode(self)
 				end
 			end
