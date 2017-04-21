@@ -52,7 +52,7 @@ local function get_entity_def(mob_def)
 		panic_mode.duration = 3
 		panic_mode.moving_speed = mob_def.stats.panic_speed or entity_def.modes["walk"].moving_speed * 2
 		panic_mode.change_direction_on_mode_change = true
-		panic_mode.update_yaw = 0.75
+		panic_mode.direction_change_interval = 0.75
 		entity_def.modes["panic"] = panic_mode
 	end
 	if not entity_def.model.animations["panic"] then
@@ -139,16 +139,16 @@ local function get_entity_def(mob_def)
 		self.owner_name = staticdata_table.owner_name or ""
 
 		-- create timers
-		self.lifetimer = staticdata_table.lifetimer or 0
-		self.breedtimer = staticdata_table.breedtimer or mob_def.stats.breedtime or 0
+		self.life_timer = staticdata_table.life_timer or 0
+		self.breed_cooldown_timer = staticdata_table.breed_cooldown_timer or 0
 		-- these timers are not saved in the static data
-		self.modetimer = 0
-		self.yawtimer = 0
-		self.searchtimer = 0
-		self.followtimer = 0
-		self.soundtimer = 0
-		self.swimtimer = 2
-		self.lovetimer = mob_def.stats.lovetime or 0
+		self.mode_timer = 0
+		self.direction_change_timer = 0
+		self.search_timer = 0
+		self.follow_timer = 0
+		self.sound_timer = 0
+		self.swim_timer = 0
+		self.breed_timer = 0
 
 		-- set acceleration for on land (the mob will detect if it is in water in the first tick and respond appropriately)
 		self.in_water = false

@@ -105,9 +105,9 @@ local function change_mode(self, new_mode)
 		self.mode = new_mode
 
 		-- reset timers
-		self.modetimer = 0
-		self.yawtimer = 0
-		self.followtimer = 0.6 + 0.1	-- TODO: 0.6 is the followtimer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
+		self.mode_timer = 0
+		self.direction_change_timer = 0
+		self.follow_timer = 0.5 + 0.1	-- 0.5 is the follow_timer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
 		-- TODO: sound timer
 
 		-- set speed
@@ -367,8 +367,6 @@ animals.on_rightclick = function(self, clicker)
 						-- set properties
 						self.tamed = true
 						self.owner_name = clicker:get_player_name()
-						self.breedtimer = self.stats.breedtime	-- allows the mob to enter breeding mode straight away
-						self.lovetimer = self.stats.lovetime	-- makes sure the mob isn't in breeding mode
 
 						-- show that the mob has been tamed
 						local pos = self.object:getpos()
@@ -383,12 +381,12 @@ animals.on_rightclick = function(self, clicker)
 				end
 			else
 				-- put mob into breeding mode
-				if self.stats.breed_items and self.breedtimer >= self.stats.breedtime then
+				if self.stats.breed_items and self.breed_cooldown_timer <= 0 then
 					-- reset the breeding cooldown timer
-					self.breedtimer = 0
+					self.breed_cooldown_timer = self.stats.breed_cooldown_time
 
 					-- enable breeding mode
-					self.lovetimer = 0
+					self.breed_timer = self.stats.breed_time
 
 					-- remove the item used to breed the mob
 					if self.stats.breed_items and check_wielded(name, self.stats.breed_items) then
@@ -405,36 +403,36 @@ end
 
 animals.on_step = function(self, dtime)
 	-- timer updates
-	self.lifetimer = self.lifetimer + dtime
-	if self.breedtimer < (self.stats.breedtime or 0) then
-		self.breedtimer = self.breedtimer + dtime
+	self.life_timer = self.life_timer + dtime
+	if self.breed_cooldown_timer > 0 then	-- prevents the timer from wrapping around over long periods of time
+		self.breed_cooldown_timer = self.breed_cooldown_timer - dtime
 	end
 
-	self.modetimer = self.modetimer + dtime
-	self.yawtimer = self.yawtimer + dtime
-	self.searchtimer = self.searchtimer + dtime
-	self.followtimer = self.followtimer + dtime
-	self.soundtimer = self.soundtimer + dtime
-	self.swimtimer = self.swimtimer + dtime
-	if self.lovetimer < (self.stats.lovetime or 0) then
-		self.lovetimer = self.lovetimer + dtime
+	self.mode_timer = self.mode_timer + dtime
+	self.direction_change_timer = self.direction_change_timer + dtime
+	self.search_timer = self.search_timer + dtime
+	self.follow_timer = self.follow_timer + dtime
+	self.sound_timer = self.sound_timer + dtime
+	self.swim_timer = self.swim_timer + dtime
+	if self.breed_timer > 0 then	-- prevents the timer from wrapping around over long periods of time
+		self.breed_timer = self.breed_timer - dtime
 	end
 
-	-- main
-	if self.lifetimer > self.stats.lifetime then
-		self.lifetimer = 0
+	-- despawn if life timer has expired
+	if self.life_timer > self.stats.life_time then
+		self.life_timer = 0
 		if self.tamed == false then
 			self.object:remove()
 		end
 	end
 
 	-- breed if in breeding mode and a mate is nearby
-	if self.stats.breed_items and self.tamed and self.lovetimer < self.stats.lovetime then
+	if self.stats.breed_items and self.tamed and self.breed_timer > 0 then
 		local mates = animals.findTarget(self.object, self.object:getpos(), self.stats.breed_distance, self.mob_name, self.owner_name, false)
 		if #mates >= 1 then
 			for _, mate in ipairs(mates) do
 				local mate_entity = mate:get_luaentity()
-				if mate_entity.tamed and mate_entity.lovetimer < self.stats.lovetime then	-- check that the mate is ready to breed
+				if mate_entity.tamed and mate_entity.breed_timer > 0 then	-- check that the mate is ready to breed
 					if self.on_breed(self, mate_entity) == true and mate_entity.on_breed(mate_entity, self) == true then	-- call self and mate's breed callbacks and check that they both return true
 						-- create the child
 						local child = minetest.add_entity(self.object:getpos(), self.mob_name)
@@ -443,12 +441,11 @@ animals.on_step = function(self, dtime)
 						local child_entity = child:get_luaentity()
 						child_entity.tamed = true
 						child_entity.owner_name = self.owner_name
-						child_entity.breedtimer = 0
-						child_entity.lovetimer = self.stats.lovetime
+						child_entity.breed_cooldown_timer = self.stats.breed_cooldown_time	-- prevents the child from being able to breed immediately
 
 						-- disable breeding mode for self and mate
-						self.lovetimer = self.stats.lovetime
-						mate_entity.lovetimer = self.stats.lovetime
+						self.breed_timer = 0
+						mate_entity.breed_timer = 0
 
 						break
 					end
@@ -470,11 +467,11 @@ animals.on_step = function(self, dtime)
 	if self.current_node.name == "default:water_source" or self.current_node.name == "default:water_flowing" or self.current_node.name == "default:river_water_source" or self.current_node.name == "default:river_water_flowing" then
 		if self.in_water == false then
 			self.in_water = true
-			self.swimtimer = 0
+			self.swim_timer = 0
 			self.object:setacceleration({x = 0, y = -0.25, z = 0})	-- set acceleration for in water
 		end
-		if self.swimtimer > 0.25 then
-			self.swimtimer = 0
+		if self.swim_timer > 0.25 then
+			self.swim_timer = 0
 
 			-- set velocity to produce bobbing effect
 			local vel = self.object:getvelocity()
@@ -495,13 +492,13 @@ animals.on_step = function(self, dtime)
 	end
 
 	-- change mode randomly
-	if self.mode == "" or (self.mode ~= "follow" and self.modetimer > self.modes[self.mode].duration and self.modes[self.mode].duration > 0) then
+	if self.mode == "" or (self.mode ~= "follow" and self.modes[self.mode].duration and self.mode_timer > self.modes[self.mode].duration) then
 		change_mode(self)
 	end
 
 	-- change yaw randomly
-	if self.mode ~= "follow" and self.modes[self.mode].update_yaw and self.yawtimer > self.modes[self.mode].update_yaw then
-		self.yawtimer = 0
+	if self.mode ~= "follow" and self.modes[self.mode].direction_change_interval and self.direction_change_timer > self.modes[self.mode].direction_change_interval then
+		self.direction_change_timer = 0
 		change_direction(self)
 	end
 
@@ -529,8 +526,8 @@ animals.on_step = function(self, dtime)
 
 		-- look for a target to follow
 		if self.stats.follow_items then
-			if self.searchtimer > 0.6 then
-				self.searchtimer = 0
+			if self.search_timer > 0.5 then
+				self.search_timer = 0
 				local targets = animals.findTarget(self.object, self.object:getpos(), self.stats.follow_distance, "player", self.owner_name, false)
 				local target = nil
 				if #targets > 1 then
@@ -552,8 +549,8 @@ animals.on_step = function(self, dtime)
 
 	-- perform actions for follow mode (this can't be an else clause because follow mode may have been enabled in the previous block)
 	if self.mode == "follow" then
-		if self.target and self.followtimer > 0.6 then
-			self.followtimer = 0
+		if self.target and self.follow_timer > 0.5 then
+			self.follow_timer = 0
 
 			-- get the distance and direction to the target
 			local my_pos = self.object:getpos()
@@ -597,8 +594,8 @@ animals.on_step = function(self, dtime)
 --		if not self.snd_rnd_time then
 --			self.snd_rnd_time = math.random((rnd_sound.time_min or 5), (rnd_sound.time_max or 35))
 --		end
---		if rnd_sound and self.soundtimer > self.snd_rnd_time + math.random() then
---			self.soundtimer = 0
+--		if rnd_sound and self.sound_timer > self.snd_rnd_time + math.random() then
+--			self.sound_timer = 0
 --			self.snd_rnd_time = nil
 --			core.sound_play(rnd_sound.name, {pos = me:getpos(), gain = rnd_sound.gain or 1, max_hear_distance = rnd_sound.distance or 30})
 --		end
@@ -611,7 +608,7 @@ animals.get_staticdata = function(self)
 		tamed = self.tamed,
 		owner_name = self.owner_name,
 
-		lifetimer = self.lifetimer,
-		breedtimer = self.breedtimer,
+		life_timer = self.life_timer,
+		breed_cooldown_timer = self.breed_cooldown_timer,
 	}
 end
