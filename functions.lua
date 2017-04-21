@@ -259,24 +259,6 @@ spawn_particles = function(pos, velocity, texture_str)
 	})
 end
 
-local function tame(self, owner_name)
-	self.tamed = true
-	self.owner_name = owner_name
-	self.breedtimer = self.stats.breedtime
-	self.lovetimer = self.stats.lovetime
-	local pos = self.object:getpos()
-	spawn_particles({ x = pos.x, y = pos.y + 1.0, z = pos.z }, { x = 0, y = 1.0, z = 0 }, "heart.png")
-	return true
-end
-
-local function breed(self)
-	if self.breedtimer >= self.stats.breedtime then
-		self.lovetimer = 0
-		return true
-	end
-	return false
-end
-
 -- --
 -- Default entity functions
 -- --
@@ -376,22 +358,42 @@ end
 animals.on_rightclick = function(self, clicker)
 	local item = clicker:get_wielded_item()
 	if item then
-		local name = item:get_name()
-		if name then
-			if not self.tamed then
-				if self.stats.tame_items and check_wielded(name, self.stats.tame_items) then
-					if tame(self, clicker:get_player_name()) then
-						item:take_item()
-						if not core.setting_getbool("creative_mode") then
+		local item_name = item:get_name()
+		if item_name then
+			if self.tamed == false then
+				-- tame mob
+				if self.stats.tame_items and check_wielded(item_name, self.stats.tame_items) then
+					if self.on_tame(slef, clicker:get_player_name()) then	-- check that the tame callback returns true
+						-- set properties
+						self.tamed = true
+						self.owner_name = clicker:get_player_name()
+						self.breedtimer = self.stats.breedtime	-- allows the mob to enter breeding mode straight away
+						self.lovetimer = self.stats.lovetime	-- makes sure the mob isn't in breeding mode
+
+						-- show that the mob has been tamed
+						local pos = self.object:getpos()
+						spawn_particles({ x = pos.x, y = pos.y + 1.0, z = pos.z }, { x = 0, y = 1.0, z = 0 }, "heart.png")
+
+						-- remove the item used to tame the mob
+						if not minetest.setting_getbool("creative_mode") then
+							item:take_item()
 							clicker:set_wielded_item(item)
 						end
 					end
 				end
 			else
-				if self.stats.breed_items and check_wielded(name, self.stats.breed_items) then
-					if breed(self) then
-						item:take_item()
-						if not core.setting_getbool("creative_mode") then
+				-- put mob into breeding mode
+				if self.stats.breed_items and self.breedtimer >= self.stats.breedtime then
+					-- reset the breeding cooldown timer
+					self.breedtimer = 0
+
+					-- enable breeding mode
+					self.lovetimer = 0
+
+					-- remove the item used to breed the mob
+					if self.stats.breed_items and check_wielded(name, self.stats.breed_items) then
+						if not minetest.setting_getbool("creative_mode") then
+							item:take_item()
 							clicker:set_wielded_item(item)
 						end
 					end
@@ -404,11 +406,8 @@ end
 animals.on_step = function(self, dtime)
 	-- timer updates
 	self.lifetimer = self.lifetimer + dtime
-	if self.stats.breed_items and self.breedtimer < self.stats.breedtime then
+	if self.breedtimer < (self.stats.breedtime or 0) then
 		self.breedtimer = self.breedtimer + dtime
-	end
-	if self.stats.breed_items and self.lovetimer < self.stats.lovetime then
-		self.lovetimer = self.lovetimer + dtime
 	end
 
 	self.modetimer = self.modetimer + dtime
@@ -417,6 +416,9 @@ animals.on_step = function(self, dtime)
 	self.followtimer = self.followtimer + dtime
 	self.soundtimer = self.soundtimer + dtime
 	self.swimtimer = self.swimtimer + dtime
+	if self.lovetimer < (self.stats.lovetime or 0) then
+		self.lovetimer = self.lovetimer + dtime
+	end
 
 	-- main
 	if self.lifetimer > self.stats.lifetime then
@@ -426,29 +428,37 @@ animals.on_step = function(self, dtime)
 		end
 	end
 
-	-- breeding
-	if self.stats.breed_items then
-		if self.lovetimer < self.stats.lovetime then
-			self.breedtimer = 0
-			local mates = animals.findTarget(self.object, self.object:getpos(), 4, self.mob_name, self.owner_name, false)
-			if #mates >= 1 then
-				for _, mate in ipairs(mates) do
-					local mate_entity = mate:get_luaentity()
-					if mate_entity.lovetimer < self.stats.lovetime then
-						local child = core.add_entity(self.object:getpos(), self.mob_name)
-						local entity = child:get_luaentity()
-						entity.tamed = true
-						entity.owner_name = self.owner_name
-						entity.breedtimer = 0
-						entity.lovetimer = self.stats.lovetime
+	-- breed if in breeding mode and a mate is nearby
+	if self.stats.breed_items and self.tamed and self.lovetimer < self.stats.lovetime then
+		local mates = animals.findTarget(self.object, self.object:getpos(), self.stats.breed_distance, self.mob_name, self.owner_name, false)
+		if #mates >= 1 then
+			for _, mate in ipairs(mates) do
+				local mate_entity = mate:get_luaentity()
+				if mate_entity.tamed and mate_entity.lovetimer < self.stats.lovetime then	-- check that the mate is ready to breed
+					if self.on_breed(self, mate_entity) == true and mate_entity.on_breed(mate_entity, self) == true then	-- call self and mate's breed callbacks and check that they both return true
+						-- create the child
+						local child = minetest.add_entity(self.object:getpos(), self.mob_name)
+
+						-- set the child properties
+						local child_entity = child:get_luaentity()
+						child_entity.tamed = true
+						child_entity.owner_name = self.owner_name
+						child_entity.breedtimer = 0
+						child_entity.lovetimer = self.stats.lovetime
+
+						-- disable breeding mode for self and mate
 						self.lovetimer = self.stats.lovetime
 						mate_entity.lovetimer = self.stats.lovetime
+
+						break
 					end
 				end
 			end
-			local pos = self.object:getpos()
-			spawn_particles({ x = pos.x, y = pos.y + 1.0, z = pos.z }, { x = 0, y = 1.0, z = 0 }, "heart.png")
 		end
+
+		-- show that breed mode is active
+		local pos = self.object:getpos()
+		spawn_particles({ x = pos.x, y = pos.y + 1.0, z = pos.z }, { x = 0, y = 1.0, z = 0 }, "heart.png")
 	end
 
 	-- update current node

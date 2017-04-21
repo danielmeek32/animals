@@ -89,6 +89,22 @@ local function get_entity_def(mob_def)
 		end
 	end
 
+	entity_def.on_tame = function(self, owner_name)
+		if mob_def.on_tame then
+			return mob_def.on_tame(self, owner_name)
+		else
+			return true
+		end
+	end
+
+	entity_def.on_breed = function(self, mate)
+		if mob_def.on_breed then
+			return mob_def.on_breed(self, mate)
+		else
+			return true
+		end
+	end
+
 	-- add functions
 
 	entity_def.on_activate = function(self, staticdata)
@@ -121,18 +137,10 @@ local function get_entity_def(mob_def)
 		self.mode = ""	-- initialising with a blank mode will cause the mob to choose a random mode in the first tick
 		self.tamed = staticdata_table.tamed or false
 		self.owner_name = staticdata_table.owner_name or ""
-		self.target = nil
-		self.autofollowing = false
 
 		-- create timers
 		self.lifetimer = staticdata_table.lifetimer or 0
-		if mob_def.stats.breed_items then
-			self.breedtimer = staticdata_table.breedtimer or mob_def.stats.breedtime
-			self.lovetimer = mob_def.stats.lovetime
-		else
-			self.breedtimer = 0
-			self.lovetimer = 0
-		end
+		self.breedtimer = staticdata_table.breedtimer or mob_def.stats.breedtime or 0
 		-- these timers are not saved in the static data
 		self.modetimer = 0
 		self.yawtimer = 0
@@ -140,6 +148,7 @@ local function get_entity_def(mob_def)
 		self.followtimer = 0
 		self.soundtimer = 0
 		self.swimtimer = 2
+		self.lovetimer = mob_def.stats.lovetime or 0
 
 		-- set acceleration for on land (the mob will detect if it is in water in the first tick and respond appropriately)
 		self.in_water = false
