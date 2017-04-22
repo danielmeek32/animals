@@ -23,7 +23,6 @@
 --
 
 -- TODO: which functions should be local?
--- TODO: finish adding api calls (e.g. is_tamed(), get_owner_name(), is_following(), get_target(), get_position(), play_sound(), etc.)
 -- TODO: spawning
 
 local update_animation
@@ -353,7 +352,7 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 			elseif type(self.drops) == "table" then
 				drops = self.drops
 			end
-			animals.dropItems(self.object:getpos(), drops)
+			self:drop_items(drops)
 		end
 
 		-- call die callback
@@ -458,7 +457,7 @@ animals.on_step = function(self, dtime)
 
 	-- breed if in breeding mode and a mate is nearby
 	if self.stats.breed_items and self.tamed and self.breed_timer > 0 then
-		local mates = animals.findTarget(self.object, self.object:getpos(), self.stats.breed_distance, self.mob_name, self.owner_name, false)
+		local mates = self:find_objects(self.stats.breed_distance, self.mob_name, false)
 		if #mates >= 1 then
 			for _, mate in ipairs(mates) do
 				local mate_entity = mate:get_luaentity()
@@ -557,7 +556,12 @@ animals.on_step = function(self, dtime)
 		if self.stats.follow_items then
 			if self.search_timer > 0.5 then
 				self.search_timer = 0
-				local targets = animals.findTarget(self.object, self.object:getpos(), self.stats.follow_distance, "player", self.owner_name, false)
+				local targets
+				if self.tamed then
+					targets = self:find_objects(self.stats.follow_distance, "owner", false)
+				else
+					targets = self:find_objects(self.stats.follow_distance, "player", false)
+				end
 				local target = nil
 				if #targets > 1 then
 					target = targets[math.random(1, #targets)]

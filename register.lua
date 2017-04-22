@@ -109,8 +109,7 @@ local function get_entity_def(mob_def)
 
 	entity_def.on_activate = function(self, staticdata)
 		-- add api calls
-
-		-- mode changing
+		-- mode changing and following
 		self.get_mode = function(self)
 			return self.mode
 		end
@@ -120,15 +119,28 @@ local function get_entity_def(mob_def)
 		self.choose_random_mode = function(self)
 			animals.change_mode(self)	-- TODO: this shouldn't be in the animals namespace
 		end
+		self.is_following = function(self)
+			if self.mode == "follow" then
+				return true
+			else
+				return false
+			end
+		end
+		self.get_target = function(self)
+			return self.target
+		end
 		self.follow = function(self, target)
 			self.target = target
 			self.autofollowing = false
 			animals.change_mode(self, "follow")
 		end
-
 		-- breeding and taming
-		-- TODO
-
+		self.is_tame = function(self)
+			return self.tamed
+		end
+		self.get_owner_name = function(self)
+			return self.owner_name
+		end
 		-- sounds and drops
 		self.play_sound = function(self, sound_name)
 			if self.sounds[sound_name] then
@@ -136,7 +148,58 @@ local function get_entity_def(mob_def)
 			end
 		end
 		self.drop_items = function(self, items)
-			-- TODO
+			for _, item in ipairs(items) do
+				-- decide if the item should be dropped
+				local dropping = false
+				if item.chance then
+					if math.random() <= item.chance then
+						dropping = true
+					end
+				else
+					dropping = true
+				end
+
+				if dropping == true then
+					-- choose quantity
+					local quantity
+					if item.min and item.max then
+						quantity = math.random(item.min, item.max)
+					else
+						quantity = 1
+					end
+
+					-- drop item
+					minetest.add_item(self.object:getpos(), item.name .. " " .. quantity)
+				end
+			end
+		end
+		-- environment
+		self.get_luaentity = function(self)
+			return self.object
+		end
+		self.get_position = function(self)
+			return self.object:getpos()
+		end
+		self.find_objects = function(self, radius, type, xray)
+			local objects = {}
+			local my_pos = self.object:getpos()
+			for _, object in ipairs(minetest.get_objects_inside_radius(my_pos, radius)) do
+				if object ~= self.object then
+					if xray == true or minetest.line_of_sight(my_pos, object:getpos()) == true then
+						if type == "player" and object:is_player() then
+							table.insert(objects, object)
+						elseif type == "owner" and object:is_player() and self.tamed and object:get_player_name() == self.owner_name then
+							table.insert(objects, object)
+						else
+							local entity = object:get_luaentity()
+							if entity and entity.mob_name == type then
+								table.insert(objects, object)
+							end
+						end
+					end
+				end
+			end
+			return objects
 		end
 
 		-- load static data into a table
