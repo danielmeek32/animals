@@ -390,7 +390,7 @@ local function default_on_step(self, dtime)
 
 			-- set animation
 			if self.animations["swim"] then
-				set_animation(self, self.animations[self.current_mode])
+				set_animation(self, self.animations[self.mode])
 			end
 
 			-- set acceleration for on land
