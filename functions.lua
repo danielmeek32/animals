@@ -276,11 +276,12 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 	-- change hp
 	local hp = self.object:get_hp()
 	hp = hp - damage
-	hp = math.ceil(hp)	--make sure hp is an integer
+	hp = math.floor(hp)	--make sure hp is an integer
 	self.object:set_hp(hp)
 
-	-- show damage/death
 	if hp > 0 then
+		-- show damage
+
 		-- make the mob jump into the air
 		local velocity = self.object:getvelocity()
 		self.object:setvelocity({x = velocity.x, y = velocity.y + 5.0, z = velocity.z})
@@ -299,6 +300,8 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 			minetest.sound_play(self.sounds.on_damage.name, {pos = self.object:getpos(), max_hear_distance = self.sounds.on_damage.distance or 5, gain = self.sounds.on_damage.gain or 1})
 		end
 	else
+		-- perform death actions
+
 		-- change to death mode
 		change_mode(self, "death")
 
