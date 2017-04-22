@@ -22,19 +22,19 @@
 -- 3. This notice may not be removed or altered from any source distribution.
 --
 
-core.register_craftitem("animals:flesh", {
+minetest.register_craftitem("animals:flesh", {
 	description = "Flesh",
 	inventory_image = "animals_flesh.png",
 	on_use = core.item_eat(2),
 })
 
-core.register_craftitem("animals:meat", {
+minetest.register_craftitem("animals:meat", {
 	description = "Cooked Meat",
 	inventory_image = "animals_meat.png",
 	on_use = core.item_eat(4),
 })
 
-core.register_craft({
+minetest.register_craft({
 	type = "cooking",
 	output = "animals:meat",
 	recipe = "animals:flesh",

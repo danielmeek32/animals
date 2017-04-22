@@ -24,11 +24,10 @@
 
 animals = {}
 
-local modpath = core.get_modpath("animals")
+local modpath = minetest.get_modpath("animals")
 
--- API and common functions
-dofile(modpath .."/functions.lua")
-dofile(modpath .."/register.lua")
+-- mob engine
+dofile(modpath .."/engine.lua")
 
--- Common items
+-- items
 dofile(modpath .."/items.lua")
