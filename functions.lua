@@ -123,9 +123,15 @@ local function change_mode(self, new_mode)
 		self.mode = new_mode
 
 		-- reset timers
-		self.mode_timer = 0
-		self.direction_change_timer = 0
-		self.follow_timer = 0.5 + 0.1	-- 0.5 is the follow_timer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
+		if self.mode ~= "follow" and ((self.modes[self.mode].min_duration and self.modes[self.mode].max_duration) or self.modes[self.mode].duration) then
+			self.mode_timer = generate_interval(self.modes[self.mode].min_duration, self.modes[self.mode].max_duration, self.modes[self.mode].duration)
+		end
+		if self.mode ~= "follow" and ((self.modes[self.mode].min_direction_change_interval and self.modes[self.mode].max_direction_change_interval) or self.modes[self.mode].direction_change_interval) then
+			self.direction_change_timer = generate_interval(self.modes[self.mode].min_direction_change_interval, self.modes[self.mode].max_direction_change_interval, self.modes[self.mode].direction_change_interval)
+		end
+		if self.mode == "follow" then
+			self.follow_timer = 0.5 + 0.1	-- 0.5 is the follow_timer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
+		end
 		if self.sounds[self.mode] and ((self.sounds[self.mode].min_interval and self.sounds[self.mode].max_interval) or self.sounds[self.mode].interval) then
 			self.sound_timer = generate_interval(self.sounds[self.mode].min_interval, self.sounds[self.mode].max_interval, self.sounds[self.mode].interval)
 		end
@@ -432,8 +438,8 @@ animals.on_step = function(self, dtime)
 		self.breed_cooldown_timer = self.breed_cooldown_timer - dtime
 	end
 
-	self.mode_timer = self.mode_timer + dtime
-	self.direction_change_timer = self.direction_change_timer + dtime
+	self.mode_timer = self.mode_timer - dtime
+	self.direction_change_timer = self.direction_change_timer - dtime
 	self.search_timer = self.search_timer + dtime
 	self.follow_timer = self.follow_timer + dtime
 	self.sound_timer = self.sound_timer - dtime
@@ -515,13 +521,13 @@ animals.on_step = function(self, dtime)
 	end
 
 	-- change mode randomly
-	if self.mode == "" or (self.mode ~= "follow" and self.modes[self.mode].duration and self.mode_timer > self.modes[self.mode].duration) then
+	if self.mode == "" or (self.mode ~= "follow" and ((self.modes[self.mode].min_duration and self.modes[self.mode].max_duration) or self.modes[self.mode].duration) and self.mode_timer <= 0) then
 		change_mode(self)
 	end
 
-	-- change yaw randomly
-	if self.mode ~= "follow" and self.modes[self.mode].direction_change_interval and self.direction_change_timer > self.modes[self.mode].direction_change_interval then
-		self.direction_change_timer = 0
+	-- change direction randomly
+	if self.mode ~= "follow" and ((self.modes[self.mode].min_direction_change_interval and self.modes[self.mode].max_direction_change_interval) or self.modes[self.mode].direction_change_interval) and self.direction_change_timer <= 0 then
+		self.direction_change_timer = generate_interval(self.modes[self.mode].min_direction_change_interval, self.modes[self.mode].max_direction_change_interval, self.modes[self.mode].direction_change_interval)
 		change_direction(self)
 	end
 
