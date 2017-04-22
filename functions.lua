@@ -25,8 +25,6 @@
 -- TODO: which functions should be local?
 -- TODO: spawning
 
-local update_animation
-
 -- checks that an item is in a list of items
 local function check_item(item_name, item_list)
 	for _, name in ipairs(item_list) do
@@ -67,6 +65,11 @@ local function get_target_speed(self)
 	else
 		return self.modes[self.mode].moving_speed or 0
 	end
+end
+
+-- set the current animation
+local function set_animation(self, animation)
+	self.object:set_animation({x = animation.start, y = animation.stop}, animation.speed, 0, animation.loop)
 end
 
 -- change the direction
@@ -158,11 +161,11 @@ local function change_mode(self, new_mode)
 		end
 
 		-- set animation
-		local anim_def = self.model.animations[self.mode]
-		if self.in_water and self.model.animations["swim"] then
-			anim_def = self.model.animations["swim"]
+		local animation = self.animations[self.mode]
+		if self.in_water and self.animations["swim"] then
+			animation = self.animations["swim"]
 		end
-		update_animation(self.object, anim_def)
+		set_animation(self, animation)
 
 		-- update the eaten node
 		if self.eat_node then
@@ -259,14 +262,6 @@ local function get_polar_direction(direction)
 		else
 			return 0
 		end
-	end
-end
-
---
-
-update_animation = function(obj_ref, anim_def)
-	if anim_def and obj_ref then
-		obj_ref:set_animation({x = anim_def.start, y = anim_def.stop}, anim_def.speed, 0, anim_def.loop)
 	end
 end
 
@@ -496,7 +491,14 @@ animals.on_step = function(self, dtime)
 		if self.in_water == false then
 			self.in_water = true
 			self.swim_timer = 0
-			self.object:setacceleration({x = 0, y = -0.25, z = 0})	-- set acceleration for in water
+
+			-- set animation
+			if self.animations["swim"] then
+				set_animation(self, self.animations["swim"])
+			end
+
+			-- set acceleration for in water
+			self.object:setacceleration({x = 0, y = -0.25, z = 0})
 		end
 		if self.swim_timer > 0.25 then
 			self.swim_timer = 0
@@ -514,7 +516,14 @@ animals.on_step = function(self, dtime)
 	else
 		if self.in_water == true then
 			self.in_water = false
-			self.object:setacceleration({x = 0, y = -15, z = 0})	-- set acceleration for on land
+
+			-- set animation
+			if self.animations["swim"] then
+				set_animation(self, self.animations[self.current_mode])
+			end
+
+			-- set acceleration for on land
+			self.object:setacceleration({x = 0, y = -15, z = 0})
 		end
 	end
 
@@ -608,13 +617,13 @@ animals.on_step = function(self, dtime)
 				-- update the animation
 				local speed = get_target_speed(self)
 				if speed > 0 then
-					local anim_def = self.model.animations["follow"]
-					if self.in_water and self.model.animations["swim"] then
-						anim_def = self.model.animations["swim"]
+					local animation = self.animations["follow"]
+					if self.in_water and self.animations["swim"] then
+						animation = self.animations["swim"]
 					end
-					update_animation(self.object, anim_def)
+					set_animation(self, animation)
 				else
-					update_animation(self.object, self.model.animations["idle"])
+					set_animation(self, self.animations["idle"])
 				end
 			end
 		end

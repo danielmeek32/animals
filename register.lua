@@ -39,7 +39,7 @@ local function get_entity_def(mob_def)
 
 		mob_name = mob_def.name,
 		stats = mob_def.stats,
-		model = mob_def.model,
+		animations = mob_def.animations,
 		sounds = mob_def.sounds,
 		modes = mob_def.modes,
 		drops = mob_def.drops,
@@ -55,10 +55,10 @@ local function get_entity_def(mob_def)
 		panic_mode.direction_change_interval = 0.75
 		entity_def.modes["panic"] = panic_mode
 	end
-	if not entity_def.model.animations["panic"] then
-		local panic_animation = table.copy(entity_def.model.animations["walk"])
+	if not entity_def.animations["panic"] then
+		local panic_animation = table.copy(entity_def.animations["walk"])
 		panic_animation.speed = panic_animation.speed * (entity_def.modes["panic"].moving_speed / entity_def.modes["walk"].moving_speed)
-		entity_def.model.animations["panic"] = panic_animation
+		entity_def.animations["panic"] = panic_animation
 	end
 
 	-- create "death" mode (overwriting any existing mode with the same)
