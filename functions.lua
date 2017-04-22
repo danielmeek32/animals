@@ -27,6 +27,16 @@
 
 local update_animation
 
+-- checks that an item is in a list of items
+local function check_item(item_name, item_list)
+	for _, name in ipairs(item_list) do
+		if name == item_name then
+			return true
+		end
+	end
+	return false
+end
+
 -- choose a random interval in a range
 -- If min_interval and max_interval are non-nil, a random interval between min_interval and max_interval is chosen.
 -- If min_interval and max_interval are nil, interval is returned.
@@ -260,15 +270,6 @@ update_animation = function(obj_ref, anim_def)
 	end
 end
 
-local function check_wielded(wielded, item_list)
-	for s,w in pairs(item_list) do
-		if w == wielded then
-			return true
-		end
-	end
-	return false
-end
-
 spawn_particles = function(pos, velocity, texture_str)
 	local vel = vector.multiply(velocity, 0.5)
 	vel.y = 0
@@ -391,7 +392,7 @@ animals.on_rightclick = function(self, clicker)
 		if item_name then
 			if self.tamed == false then
 				-- tame mob
-				if self.stats.tame_items and check_wielded(item_name, self.stats.tame_items) then
+				if self.stats.tame_items and check_item(item_name, self.stats.tame_items) == true then
 					if self.on_tame(slef, clicker:get_player_name()) then	-- check that the tame callback returns true
 						-- set properties
 						self.tamed = true
@@ -418,7 +419,7 @@ animals.on_rightclick = function(self, clicker)
 					self.breed_timer = self.stats.breed_time
 
 					-- remove the item used to breed the mob
-					if self.stats.breed_items and check_wielded(name, self.stats.breed_items) then
+					if self.stats.breed_items and check_item(name, self.stats.breed_items) == true then
 						if not minetest.setting_getbool("creative_mode") then
 							item:take_item()
 							clicker:set_wielded_item(item)
@@ -570,7 +571,7 @@ animals.on_step = function(self, dtime)
 				end
 				if target ~= nil then
 					local item_name = target:get_wielded_item():get_name()
-					if item_name and check_wielded(item_name, self.stats.follow_items) == true then
+					if item_name and check_item(item_name, self.stats.follow_items) == true then
 						self.target = target
 						self.autofollowing = true
 						change_mode(self, "follow")
@@ -596,7 +597,7 @@ animals.on_step = function(self, dtime)
 			-- stop following if autofollowing and the target is out of range or is no longer wielding the correct item
 			if self.autofollowing == true then
 				local item_name = self.target:get_wielded_item():get_name()
-				if distance > self.stats.follow_distance or (item_name and check_wielded(item_name, self.stats.follow_items) == false) then
+				if distance > self.stats.follow_distance or (item_name and check_item(item_name, self.stats.follow_items) == false) then
 					change_mode(self)
 				end
 			end
