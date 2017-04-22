@@ -27,7 +27,6 @@ animals = {}
 local modpath = core.get_modpath("animals")
 
 -- API and common functions
-dofile(modpath .."/common.lua")
 dofile(modpath .."/functions.lua")
 dofile(modpath .."/register.lua")
 

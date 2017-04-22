@@ -126,7 +126,15 @@ local function change_mode(self, new_mode)
 		local valid = false
 		while valid == false do
 			-- randomly choose a new mode
-			selected_mode = animals.rnd(self.modes)
+			local random = math.random()
+			local total = 0
+			for name, mode in pairs(self.modes) do
+				total = total + mode.chance
+				if random <= total then
+					selected_mode = name
+					break
+				end
+			end
 
 			-- check that the new mode is valid
 			valid = true

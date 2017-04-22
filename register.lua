@@ -388,7 +388,14 @@ local function register_spawn(spawn_def)
 			-- creature count check
 			local max
 			if active_object_count_wider > (spawn_def.max_number or 1) then
-				local mates_num = #animals.findTarget(nil, pos, 16, spawn_def.mob_name, "", true)
+				local objects = minetest.get_objects_inside_radius(pos, 16)
+				local mates_num = 0
+				for _, object in ipairs(objects) do
+					local entity = object:get_luaentity()
+					if entity and entity.mob_name == spawn_def.mob_name then
+						mates_num = mates_num + 1
+					end
+				end
 				if (mates_num or 0) >= spawn_def.max_number then
 					return
 				else
