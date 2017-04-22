@@ -668,7 +668,7 @@ local function get_entity_def(mob_def)
 		visual_size = mob_def.model.scale or {x = 1, y = 1},
 		textures = mob_def.model.textures,
 		automatic_face_movement_dir = mob_def.model.rotation or 0.0,
-		collide_with_objects = mob_def.model.collide_with_objects or true,
+		collide_with_objects = mob_def.model.collide_with_objects or false,
 		collisionbox = mob_def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
 
 		mob_name = mob_def.name,
