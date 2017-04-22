@@ -411,7 +411,7 @@ animals.on_rightclick = function(self, clicker)
 				end
 			else
 				-- put mob into breeding mode
-				if self.stats.breed_items and self.breed_cooldown_timer <= 0 then
+				if self.stats.breed_items and check_item(item_name, self.stats.breed_items) == true and self.breed_cooldown_timer <= 0 then
 					-- reset the breeding cooldown timer
 					self.breed_cooldown_timer = self.stats.breed_cooldown_time
 
@@ -419,11 +419,9 @@ animals.on_rightclick = function(self, clicker)
 					self.breed_timer = self.stats.breed_time
 
 					-- remove the item used to breed the mob
-					if self.stats.breed_items and check_item(name, self.stats.breed_items) == true then
-						if not minetest.setting_getbool("creative_mode") then
-							item:take_item()
-							clicker:set_wielded_item(item)
-						end
+					if not minetest.setting_getbool("creative_mode") then
+						item:take_item()
+						clicker:set_wielded_item(item)
 					end
 				end
 			end
