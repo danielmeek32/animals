@@ -608,7 +608,7 @@ local function default_on_rightclick(self, clicker)
 			if self.tamed == false then
 				-- tame mob
 				if self.parameters.tame_items and check_item(item_name, self.parameters.tame_items) == true then
-					if self.on_tame(slef, clicker:get_player_name()) then	-- check that the tame callback returns true
+					if self.on_tame(self, clicker:get_player_name()) then	-- check that the tame callback returns true
 						-- set properties
 						self.tamed = true
 						self.owner_name = clicker:get_player_name()
