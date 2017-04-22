@@ -25,7 +25,7 @@
 -- TODO: which functions should be local?
 -- TODO: spawning
 
--- checks that an item is in a list of items
+-- check if an item is in a list of items
 local function check_item(item_name, item_list)
 	for _, name in ipairs(item_list) do
 		if name == item_name then
@@ -70,6 +70,27 @@ end
 -- set the current animation
 local function set_animation(self, animation)
 	self.object:set_animation({x = animation.start, y = animation.stop}, animation.speed, 0, animation.loop)
+end
+
+-- produce particles
+local function spawn_particles(self, amount, time, position_offset, texture)
+	local position = self.object:getpos()
+	position.y = position.y + position_offset
+	minetest.add_particlespawner({
+		amount = amount,
+		time = time,
+		minpos = vector.add(position, -0.75),
+		maxpos = vector.add(position, 0.75),
+		minvel = vector.new(-0.1, 0, -0.1),
+		maxvel = vector.new(0.1, 0, 0.1),
+		minacc = vector.new(),
+		maxacc = vector.new(),
+		minexptime = 0.75,
+		maxexptime = 1,
+		minsize = 1,
+		maxsize = 2.5,
+		texture = texture,
+	})
 end
 
 -- change the direction
@@ -265,26 +286,6 @@ local function get_polar_direction(direction)
 	end
 end
 
-spawn_particles = function(pos, velocity, texture_str)
-	local vel = vector.multiply(velocity, 0.5)
-	vel.y = 0
-	core.add_particlespawner({
-		amount = 8,
-		time = 1,
-		minpos = vector.add(pos, -0.7),
-		maxpos = vector.add(pos, 0.7),
-		minvel = vector.add(vel, {x = -0.1, y = -0.01, z = -0.1}),
-		maxvel = vector.add(vel, {x = 0.1, y = 0, z = 0.1}),
-		minacc = vector.new(),
-		maxacc = vector.new(),
-		minexptime = 0.8,
-		maxexptime = 1,
-		minsize = 1,
-		maxsize = 2.5,
-		texture = texture_str,
-	})
-end
-
 -- --
 -- Default entity functions
 -- --
@@ -394,8 +395,7 @@ animals.on_rightclick = function(self, clicker)
 						self.owner_name = clicker:get_player_name()
 
 						-- show that the mob has been tamed
-						local pos = self.object:getpos()
-						spawn_particles({ x = pos.x, y = pos.y + 1.0, z = pos.z }, { x = 0, y = 1.0, z = 0 }, "heart.png")
+						spawn_particles(self, 10, 1, 1.0, "heart.png")
 
 						-- remove the item used to tame the mob
 						if not minetest.setting_getbool("creative_mode") then
@@ -477,8 +477,7 @@ animals.on_step = function(self, dtime)
 		end
 
 		-- show that breed mode is active
-		local pos = self.object:getpos()
-		spawn_particles({ x = pos.x, y = pos.y + 1.0, z = pos.z }, { x = 0, y = 1.0, z = 0 }, "heart.png")
+		spawn_particles(self, 1, 0.25, 1.0, "heart.png")
 	end
 
 	-- update current node
@@ -504,14 +503,14 @@ animals.on_step = function(self, dtime)
 			self.swim_timer = 0
 
 			-- set velocity to produce bobbing effect
-			local vel = self.object:getvelocity()
-			self.object:setvelocity({x = vel.x, y = 0.75, z = vel.z})
+			local velocity = self.object:getvelocity()
+			self.object:setvelocity({x = velocity.x, y = 0.75, z = velocity.z})
 
 			-- play swimming sounds
 			self:play_sound("swim")
 
 			-- show particles
-			spawn_particles(self.object:getpos(), vel, "bubble.png")
+			spawn_particles(self, 10, 0.25, 0, "bubble.png")
 		end
 	else
 		if self.in_water == true then
