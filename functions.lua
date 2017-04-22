@@ -23,7 +23,6 @@
 --
 
 -- TODO: which functions should be local?
--- TODO: spawning
 
 -- check if an item is in a list of items
 local function check_item(item_name, item_list)

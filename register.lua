@@ -281,175 +281,107 @@ local function get_entity_def(mob_def)
 	return entity_def
 end
 
-local function in_range(min_max, value)
-	if not value or not min_max or not min_max.min or not min_max.max then
-		return false
-	end
-	if (value >= min_max.min and value <= min_max.max) then
-		return true
-	end
-	return false
-end
-
-local function check_space(pos, height)
-	for i = 0, height do
-		local n = core.get_node_or_nil({x = pos.x, y = pos.y + i, z = pos.z})
-		if not n or n.name ~= "air" then
-			return false
+-- check that there's enough space around the given position for the given collisionbox to fit
+local function check_space(pos, collisionbox)
+	for x = collisionbox[1], collisionbox[4] do
+		for y = collisionbox[2], collisionbox[5] do
+			for z = collisionbox[3], collisionbox[6] do
+				if minetest.get_node({x = pos.x + x, y = pos.y + y + 1, z = pos.z + z}).name ~= "air" then
+					return false
+				end
+			end
 		end
 	end
-	return true
-end
-
-local time_taker = 0
-local function step(tick)
-	core.after(tick, step, tick)
-	time_taker = time_taker + tick
-end
-step(0.5)
-
-local function stop_abm_flood()
-	if time_taker == 0 then
-		return true
-	end
-	time_taker = 0
-end
-
-local function group_spawn(pos, mob, group, nodes, range, max_loops)
-	local cnt = 0
-	local cnt2 = 0
-
-	local nodes = core.find_nodes_in_area({x = pos.x - range, y = pos.y - range, z = pos.z - range},
-		{x = pos.x + range, y = pos.y, z = pos.z + range}, nodes)
-	local number = #nodes - 1
-	if max_loops and type(max_loops) == "number" then
-		number = max_loops
-	end
-	while cnt < group and cnt2 < number do
-		cnt2 = cnt2 + 1
-		local p = nodes[math.random(1, number)]
-		p.y = p.y + 1
-		if check_space(p, mob.size) == true then
-			cnt = cnt + 1
-			core.add_entity(p, mob.name)
-		end
-	end
-	if cnt < group then
-		return false
-	end
-end
-
-local function register_spawn(spawn_def)
-	if not spawn_def or not spawn_def.abm_nodes then
-		throw_error("No valid definition given.")
-		return false
-	end
-
-	if not spawn_def.abm_nodes.neighbors then
-		spawn_def.abm_nodes.neighbors = {}
-	end
-	table.insert(spawn_def.abm_nodes.neighbors, "air")
-
-	core.register_abm({
-		nodenames = spawn_def.abm_nodes.spawn_on,
-		neighbors = spawn_def.abm_nodes.neighbors,
-		interval = spawn_def.abm_interval or 44,
-		chance = spawn_def.abm_chance or 7000,
-		action = function(pos, node, active_object_count, active_object_count_wider)
-			-- prevent abm-"feature"
-			if stop_abm_flood() == true then
-				return
-			end
-
-			-- time check
-			local tod = core.get_timeofday() * 24000
-			if spawn_def.time_range then
-				local wanted_res = false
-				local range = table.copy(spawn_def.time_range)
-				if range.min > range.max and range.min <= tod then
-					wanted_res = true
-				end
-				if in_range(range, tod) == wanted_res then
-					return
-				end
-			end
-
-			-- position check
-			if spawn_def.height_limit and not in_range(spawn_def.height_limit, pos.y) then
-				return
-			end
-
-			-- light check
-			pos.y = pos.y + 1
-			local llvl = core.get_node_light(pos)
-			if spawn_def.light and not in_range(spawn_def.light, llvl) then
-				return
-			end
-			-- creature count check
-			local max
-			if active_object_count_wider > (spawn_def.max_number or 1) then
-				local objects = minetest.get_objects_inside_radius(pos, 16)
-				local mates_num = 0
-				for _, object in ipairs(objects) do
-					local entity = object:get_luaentity()
-					if entity and entity.mob_name == spawn_def.mob_name then
-						mates_num = mates_num + 1
-					end
-				end
-				if (mates_num or 0) >= spawn_def.max_number then
-					return
-				else
-					max = spawn_def.max_number - mates_num
-				end
-			end
-
-			-- ok everything seems fine, spawn creature
-			local height_min = (spawn_def.mob_size[5] or 2) - (spawn_def.mob_size[2] or 0)
-			height_min = math.ceil(height_min)
-
-			local number = 0
-			if type(spawn_def.number) == "table" then
-				number = math.random(spawn_def.number.min, spawn_def.number.max)
-			else
-				number = spawn_def.number or 1
-			end
-
-			if max and number > max then
-				number = max
-			end
-
-			if number > 1 then
-				group_spawn(pos, {name = spawn_def.mob_name, size = height_min}, number, spawn_def.abm_nodes.spawn_on, 5)
-			else
-			-- space check
-				if not check_space(pos, height_min) then
-					return
-				end
-				core.add_entity(pos, spawn_def.mob_name)
-			end
-		end,
-	})
-
 	return true
 end
 
 function animals.registerMob(mob_def)
-	if not mob_def or not mob_def.name then
-		throw_error("Can't register mob. No name or Definition given.")
-		return false
-	end
-
+	-- register entity
 	minetest.register_entity(":" .. mob_def.name, get_entity_def(mob_def))
 
-	-- register spawn
-	if mob_def.spawning then
-		local spawn_def = mob_def.spawning
-		spawn_def.mob_name = mob_def.name
-		spawn_def.mob_size = mob_def.model.collisionbox
-		if register_spawn(spawn_def) ~= true then
-			throw_error("Couldn't register spawning for '" .. mob_def.name .. "'")
-		end
-	end
+	-- register abm
+	minetest.register_abm({
+		nodenames = mob_def.spawning.nodes,
+		neighbours = {"air"},
+		interval = mob_def.spawning.interval,
+		chance = mob_def.spawning.chance,
+		catch_up = false,
+		action = function(pos, node, active_object_count, active_object_count_wider)
+			-- check time
+			local timeofday = minetest.get_timeofday() * 24000
+			if mob_def.spawning.min_time and mob_def.spawning.max_time and (timeofday < mob_def.spawning.min_time or timeofday > mob_def.spawning.max_time) then
+				return
+			end
 
-	return true
+			-- check height
+			if mob_def.spawning.min_height and mob_def.spawning.max_height and (pos.y < mob_def.spawning.min_height or pos.y > mob_def.spawning.max_height) then
+				return
+			end
+
+			-- check light
+			local light = minetest.get_node_light({x = pos.x, y = pos.y + 1, z = pos.z})
+			if mob_def.spawning.min_light and mob_def.spawning.max_light and (light < mob_def.spawning.min_light or light > mob_def.spawning.max_light) then
+				return
+			end
+
+			-- check surrounding mob count
+			if mob_def.spawning.surrounding_distance and mob_def.spawning.max_surrounding_count then
+				local objects = minetest.get_objects_inside_radius(pos, mob_def.spawning.surrounding_distance)
+				local object_count = 0
+				for _, object in ipairs(objects) do
+					local entity = object:get_luaentity()
+					if entity and entity.mob_name == mob_def.name then
+						object_count = object_count + 1
+					end
+				end
+				if object_count > mob_def.spawning.max_surrounding_count then
+					return
+				end
+			end
+
+			-- choose a spawn count
+			local count
+			if mob_def.spawning.min_spawn_count and mob_def.spawning.max_spawn_count then
+				count = math.random(mob_def.spawning.min_spawn_count, mob_def.spawning.max_spawn_count)
+			else
+				count = mob_def.spawning.spawn_count
+			end
+
+			if count == 1 then
+				-- check space
+				if check_space(pos, mob_def.model.collisionbox) == true then
+					-- spawn a single mob
+					minetest.add_entity({x = pos.x, y = pos.y + 1, z = pos.z}, mob_def.name)
+				end
+			elseif count > 1 then
+				local spawn_area = mob_def.spawning.spawn_area
+
+				-- find surrounding nodes to spawn on
+				local nodes = minetest.find_nodes_in_area({x = pos.x - spawn_area, y = pos.y - spawn_area, z = pos.z - spawn_area}, {x = pos.x + spawn_area, y = pos.y + spawn_area, z = pos.z + spawn_area}, mob_def.spawning.nodes)
+				local valid_nodes = {}
+				for _, node in ipairs(nodes) do
+					if check_space(node, mob_def.model.collisionbox) == true then
+						table.insert(valid_nodes, node)
+					end
+				end
+
+				-- determine final spawn count
+				if count > #valid_nodes then
+					count = #valid_nodes
+				end
+
+				-- spawn mobs
+				for completed = 1, count do
+					-- choose a random node from the list
+					local node_index = math.random(1, #valid_nodes)
+
+					-- spawn the mob
+					minetest.add_entity({x = valid_nodes[node_index].x, y = valid_nodes[node_index].y + 1, z = valid_nodes[node_index].z}, mob_def.name)
+
+					-- remove the node from the list so that each node is only used once
+					table.remove(valid_nodes, node_index)
+				end
+			end
+		end,
+	})
 end
