@@ -1,17 +1,14 @@
 Animals mod
-====================
-Copyright (c) 2016 Daniel <https://github.com/danielmeek32>
+===========
+Copyright (c) 2017 Daniel <https://github.com/danielmeek32>
 
-Modified from the original version for Creatures MOB-Engine (cme)
-Copyright (c) 2015 BlockMen <blockmen2015@gmail.com>
+Version: 2.0
 
-Version: 1.0 Alpha
-
-
-IMPORTANT NOTICE: This mod is currently undergoing a major rewrite. At present
-it is not particularly usable and is likely to be incompatible with any animal
-mods that you may be using. Installing this mod as it currently stands is
-likely to break your game. The last version that you should use is commit
+IMPORTANT NOTICE: This version is incompatible with animal mods intended for
+use with version 1.0. Please update your animal mods. Loading an existing
+world with animals from version 1.0 should continue to work, provided that the
+installed animal mods are updated. The last version that is compatible with
+animal mods from version 1.0 is commit
 #93c50b5b71487158be5d536ffe93beca6dd34428.
 
 This mod provides a framework for easily creating new animals for Minetest.
@@ -21,19 +18,15 @@ A tamed animal can only be interacted with or bred by its owner.
 Animals are installed via additional mods. Please consult the documentation
 accompanying each animal mod for specific details.
 
-NOTE: This mod is not, and makes no attempt to be, compatible with mods
-intended for use with or worlds containing items from Creatures MOB-Engine.
-
-
 License:
-~~~~~~~~
+--------
 Code:
-(c) Copyright 2016 Daniel; modified zlib-License
+(c) Copyright 2017 Daniel; GPLv3
 see "LICENSE.txt" for details.
 
-Media(textures and other media):
-(c) Copyright (2014-2015) BlockMen; CC-BY-SA 3.0
+Textures:
+(c) Copyright 2014-2015 BlockMen; CC-BY-SA 3.0
 
 Github:
-~~~~~~~
+-------
 https://github.com/danielmeek32/animals
