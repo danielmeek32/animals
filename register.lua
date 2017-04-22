@@ -109,6 +109,8 @@ local function get_entity_def(mob_def)
 
 	entity_def.on_activate = function(self, staticdata)
 		-- add api calls
+
+		-- mode changing
 		self.get_mode = function(self)
 			return self.mode
 		end
@@ -122,6 +124,19 @@ local function get_entity_def(mob_def)
 			self.target = target
 			self.autofollowing = false
 			animals.change_mode(self, "follow")
+		end
+
+		-- breeding and taming
+		-- TODO
+
+		-- sounds and drops
+		self.play_sound = function(self, sound_name)
+			if self.sounds[sound_name] then
+				minetest.sound_play(self.sounds[sound_name].name, {object = self.object, max_hear_distance = self.sounds[sound_name].max_hear_distance, gain = self.sounds[sound_name].gain})
+			end
+		end
+		self.drop_items = function(self, items)
+			-- TODO
 		end
 
 		-- load static data into a table

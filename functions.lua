@@ -23,11 +23,29 @@
 --
 
 -- TODO: which functions should be local?
--- TODO: sounds
 -- TODO: finish adding api calls (e.g. is_tamed(), get_owner_name(), is_following(), get_target(), get_position(), play_sound(), etc.)
 -- TODO: spawning
 
 local update_animation
+
+-- choose a random interval in a range
+-- If min_interval and max_interval are non-nil, a random interval between min_interval and max_interval is chosen.
+-- If min_interval and max_interval are nil, interval is returned.
+-- Note that interval may be nil if both min_interval and max_interval are non-nil, otherwise interval is required to be non-nil.
+local function generate_interval(min_interval, max_interval, interval)
+	if min_interval and max_interval then
+		local result = math.random() * (max_interval - min_interval) + min_interval
+		if result > max_interval then
+			return max_interval
+		elseif result < min_interval then
+			return min_interval
+		else
+			return result
+		end
+	else
+		return interval
+	end
+end
 
 -- get the correct speed for the current mode
 local function get_target_speed(self)
@@ -67,7 +85,7 @@ end
 
 -- change the mode
 -- If new_mode is nil, randomly selects a mode that is valid in the current mob state and sets it as the current mode.
--- If new_mode is non-nil, sets the current mode to new_mode. new_mode must refer to a mode that exists, and should be valid for the current mov state.
+-- If new_mode is non-nil, sets the current mode to new_mode. new_mode must refer to a mode that exists, and should be valid for the current mob state.
 local function change_mode(self, new_mode)
 	if new_mode == nil then
 		local selected_mode
@@ -108,7 +126,9 @@ local function change_mode(self, new_mode)
 		self.mode_timer = 0
 		self.direction_change_timer = 0
 		self.follow_timer = 0.5 + 0.1	-- 0.5 is the follow_timer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
-		-- TODO: sound timer
+		if self.sounds[self.mode] and ((self.sounds[self.mode].min_interval and self.sounds[self.mode].max_interval) or self.sounds[self.mode].interval) then
+			self.sound_timer = generate_interval(self.sounds[self.mode].min_interval, self.sounds[self.mode].max_interval, self.sounds[self.mode].interval)
+		end
 
 		-- set speed
 		local speed = get_target_speed(self)
@@ -179,6 +199,11 @@ local function change_mode(self, new_mode)
 			change_direction(self)
 		else
 			change_direction(self, self.object:getyaw())
+		end
+
+		-- play sound if required
+		if self.sounds[self.mode] and self.sounds[self.mode].play_on_mode_change == true then
+			self:play_sound(self.mode)
 		end
 
 		-- call mode change callback
@@ -296,9 +321,7 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 		end)
 
 		-- play damage sound
-		if self.sounds and self.sounds.on_damage then
-			minetest.sound_play(self.sounds.on_damage.name, {pos = self.object:getpos(), max_hear_distance = self.sounds.on_damage.distance or 5, gain = self.sounds.on_damage.gain or 1})
-		end
+		self:play_sound("damage")
 	else
 		-- perform death actions
 
@@ -309,9 +332,7 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 		self.object:set_properties({collisionbox = {x = 0, y = 0, z = 0}})
 
 		-- play death sound
-		if self.sounds and self.sounds.on_death then
-			minetest.sound_play(self.sounds.on_death.name, {pos = self.object:getpos(), max_hear_distance = self.sounds.on_death.distance or 5, gain = self.sounds.on_death.gain or 1})
-		end
+		self:play_sound("death")
 
 		-- remove the mob after the death duration
 		minetest.after(self.stats.death_duration, function()
@@ -415,7 +436,7 @@ animals.on_step = function(self, dtime)
 	self.direction_change_timer = self.direction_change_timer + dtime
 	self.search_timer = self.search_timer + dtime
 	self.follow_timer = self.follow_timer + dtime
-	self.sound_timer = self.sound_timer + dtime
+	self.sound_timer = self.sound_timer - dtime
 	self.swim_timer = self.swim_timer + dtime
 	if self.breed_timer > 0 then	-- prevents the timer from wrapping around over long periods of time
 		self.breed_timer = self.breed_timer - dtime
@@ -481,10 +502,9 @@ animals.on_step = function(self, dtime)
 			self.object:setvelocity({x = vel.x, y = 0.75, z = vel.z})
 
 			-- play swimming sounds
-			if self.sounds and self.sounds.swim then
-				local swim_snd = self.sounds.swim
-				minetest.sound_play(swim_snd.name, {pos = self.object:getpos(), gain = swim_snd.gain or 1, max_hear_distance = swim_snd.distance or 10})
-			end
+			self:play_sound("swim")
+
+			-- show particles
 			spawn_particles(self.object:getpos(), vel, "bubble.png")
 		end
 	else
@@ -591,18 +611,11 @@ animals.on_step = function(self, dtime)
 		end
 	end
 
---	-- Random sounds
---	if self.sounds and self.sounds.random[self.mode] then
---		local rnd_sound = self.sounds.random[self.mode]
---		if not self.snd_rnd_time then
---			self.snd_rnd_time = math.random((rnd_sound.time_min or 5), (rnd_sound.time_max or 35))
---		end
---		if rnd_sound and self.sound_timer > self.snd_rnd_time + math.random() then
---			self.sound_timer = 0
---			self.snd_rnd_time = nil
---			core.sound_play(rnd_sound.name, {pos = me:getpos(), gain = rnd_sound.gain or 1, max_hear_distance = rnd_sound.distance or 30})
---		end
---	end
+	-- play random sounds
+	if self.sounds[self.mode] and ((self.sounds[self.mode].min_interval and self.sounds[self.mode].max_interval) or self.sounds[self.mode].interval) and self.sound_timer <= 0 then
+		self.sound_timer = generate_interval(self.sounds[self.mode].min_interval, self.sounds[self.mode].max_interval, self.sounds[self.mode].interval)
+		self:play_sound(self.mode)
+	end
 end
 
 animals.get_staticdata = function(self)
