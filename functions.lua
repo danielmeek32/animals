@@ -330,7 +330,7 @@ animals.on_punch = function(self, puncher, time_from_last_punch, tool_capabiliti
 		change_mode(self, "death")
 
 		-- allow the mob to be passed through
-		self.object:set_properties({collisionbox = {x = 0, y = 0, z = 0}})
+		self.object:set_properties({collide_with_objects = false, collisionbox = {x = 0, y = 0, z = 0}})
 
 		-- play death sound
 		self:play_sound("death")
