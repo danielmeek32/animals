@@ -68,10 +68,10 @@ end
 -- get the correct speed for the current mode
 local function get_target_speed(self)
 	if self.mode == "follow" then
-		if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) < self.stats.follow_stop_distance then
+		if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) < self.parameters.follow_stop_distance then
 			return 0
 		else
-			return self.stats.follow_speed
+			return self.parameters.follow_speed
 		end
 	else
 		return self.modes[self.mode].moving_speed or 0
@@ -157,7 +157,7 @@ local function change_mode(self, new_mode)
 					node_pos.y = node_pos.y - 0.5
 					local node = minetest.get_node_or_nil(node_pos)
 					valid = false
-					for _, name in pairs(self.stats.eat_nodes) do
+					for _, name in pairs(self.parameters.eat_nodes) do
 						if node and name == node.name then
 							valid = true
 							break
@@ -244,7 +244,7 @@ local function change_mode(self, new_mode)
 			local node_pos = self.object:getpos()
 			node_pos.y = node_pos.y - 0.5
 			local node = minetest.get_node_or_nil(node_pos)
-			for _, name in pairs(self.stats.eat_nodes) do
+			for _, name in pairs(self.parameters.eat_nodes) do
 				if node and node.name == name then
 					self.eat_node = node_pos
 					break
@@ -322,7 +322,7 @@ local function default_on_step(self, dtime)
 	end
 
 	-- despawn if life timer has expired
-	if self.life_timer > self.stats.life_time then
+	if self.life_timer > self.parameters.life_time then
 		self.life_timer = 0
 		if self.tamed == false then
 			self.object:remove()
@@ -330,8 +330,8 @@ local function default_on_step(self, dtime)
 	end
 
 	-- breed if in breeding mode and a mate is nearby
-	if self.stats.breed_items and self.tamed and self.breed_timer > 0 then
-		local mates = self:find_objects(self.stats.breed_distance, self.mob_name, false)
+	if self.parameters.breed_items and self.tamed and self.breed_timer > 0 then
+		local mates = self:find_objects(self.parameters.breed_distance, self.mob_name, false)
 		if #mates >= 1 then
 			for _, mate in ipairs(mates) do
 				local mate_entity = mate:get_luaentity()
@@ -344,7 +344,7 @@ local function default_on_step(self, dtime)
 						local child_entity = child:get_luaentity()
 						child_entity.tamed = true
 						child_entity.owner_name = self.owner_name
-						child_entity.breed_cooldown_timer = self.stats.breed_cooldown_time	-- prevents the child from being able to breed immediately
+						child_entity.breed_cooldown_timer = self.parameters.breed_cooldown_time	-- prevents the child from being able to breed immediately
 
 						-- disable breeding mode for self and mate
 						self.breed_timer = 0
@@ -440,14 +440,14 @@ local function default_on_step(self, dtime)
 		end
 
 		-- look for a target to follow
-		if self.stats.follow_items then
+		if self.parameters.follow_items then
 			if self.search_timer > 0.5 then
 				self.search_timer = 0
 				local targets
 				if self.tamed then
-					targets = self:find_objects(self.stats.follow_distance, "owner", false)
+					targets = self:find_objects(self.parameters.follow_distance, "owner", false)
 				else
-					targets = self:find_objects(self.stats.follow_distance, "player", false)
+					targets = self:find_objects(self.parameters.follow_distance, "player", false)
 				end
 				local target = nil
 				if #targets > 1 then
@@ -457,7 +457,7 @@ local function default_on_step(self, dtime)
 				end
 				if target ~= nil then
 					local item_name = target:get_wielded_item():get_name()
-					if item_name and check_item(item_name, self.stats.follow_items) == true then
+					if item_name and check_item(item_name, self.parameters.follow_items) == true then
 						self.target = target
 						self.autofollowing = true
 						change_mode(self, "follow")
@@ -483,7 +483,7 @@ local function default_on_step(self, dtime)
 			-- stop following if autofollowing and the target is out of range or is no longer wielding the correct item
 			if self.autofollowing == true then
 				local item_name = self.target:get_wielded_item():get_name()
-				if distance > self.stats.follow_distance or (item_name and check_item(item_name, self.stats.follow_items) == false) then
+				if distance > self.parameters.follow_distance or (item_name and check_item(item_name, self.parameters.follow_items) == false) then
 					change_mode(self)
 				end
 			end
@@ -563,7 +563,7 @@ local function default_on_punch(self, puncher, time_from_last_punch, tool_capabi
 		self:play_sound("death")
 
 		-- remove the mob after the death duration
-		minetest.after(self.stats.death_duration, function()
+		minetest.after(self.parameters.death_duration, function()
 			self.object:remove()
 		end)
 
@@ -615,7 +615,7 @@ local function default_on_rightclick(self, clicker)
 		if item_name then
 			if self.tamed == false then
 				-- tame mob
-				if self.stats.tame_items and check_item(item_name, self.stats.tame_items) == true then
+				if self.parameters.tame_items and check_item(item_name, self.parameters.tame_items) == true then
 					if self.on_tame(slef, clicker:get_player_name()) then	-- check that the tame callback returns true
 						-- set properties
 						self.tamed = true
@@ -633,12 +633,12 @@ local function default_on_rightclick(self, clicker)
 				end
 			else
 				-- put mob into breeding mode
-				if self.stats.breed_items and check_item(item_name, self.stats.breed_items) == true and self.breed_cooldown_timer <= 0 then
+				if self.parameters.breed_items and check_item(item_name, self.parameters.breed_items) == true and self.breed_cooldown_timer <= 0 then
 					-- reset the breeding cooldown timer
-					self.breed_cooldown_timer = self.stats.breed_cooldown_time
+					self.breed_cooldown_timer = self.parameters.breed_cooldown_time
 
 					-- enable breeding mode
-					self.breed_timer = self.stats.breed_time
+					self.breed_timer = self.parameters.breed_time
 
 					-- remove the item used to breed the mob
 					if not minetest.setting_getbool("creative_mode") then
@@ -668,7 +668,7 @@ local function get_entity_def(mob_def)
 	local entity_def = {
 		physical = true,
 		stepheight = 1.1,
-		makes_footstep_sound = not mob_def.stats.silent,
+		makes_footstep_sound = not mob_def.parameters.silent,
 
 		visual = "mesh",
 		mesh = mob_def.model.mesh,
@@ -680,7 +680,7 @@ local function get_entity_def(mob_def)
 		collisionbox = mob_def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
 
 		mob_name = mob_def.name,
-		stats = mob_def.stats,
+		parameters = mob_def.parameters,
 		animations = mob_def.animations,
 		sounds = mob_def.sounds,
 		modes = mob_def.modes,
@@ -692,7 +692,7 @@ local function get_entity_def(mob_def)
 		local panic_mode = table.copy(entity_def.modes["walk"])
 		panic_mode.chance = 0
 		panic_mode.duration = 3
-		panic_mode.moving_speed = mob_def.stats.panic_speed or entity_def.modes["walk"].moving_speed * 2
+		panic_mode.moving_speed = mob_def.parameters.panic_speed or entity_def.modes["walk"].moving_speed * 2
 		panic_mode.change_direction_on_mode_change = true
 		panic_mode.direction_change_interval = 0.75
 		entity_def.modes["panic"] = panic_mode
@@ -706,7 +706,7 @@ local function get_entity_def(mob_def)
 	-- create "death" mode (overwriting any existing mode with the same)
 	local death_mode = {
 		chance = 0,
-		duration = mob_def.stats.death_duration,
+		duration = mob_def.parameters.death_duration,
 		moving_speed = 0,
 	}
 	entity_def.modes["death"] = death_mode
@@ -874,7 +874,7 @@ local function get_entity_def(mob_def)
 		self.in_water = false
 		self.object:setacceleration({x = 0, y = -15, z = 0})
 
-		self.object:set_hp(staticdata_table.hp or mob_def.stats.hp)
+		self.object:set_hp(staticdata_table.hp or mob_def.parameters.hp)
 		self.object:set_armor_groups({fleshy = 100, immortal = 1})	-- immortal is needed to disable automatic damage handling
 
 		-- call custom on_activate if defined
