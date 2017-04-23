@@ -923,7 +923,7 @@ local function get_entity_def(mob_def)
 	return entity_def
 end
 
-function animals.registerMob(mob_def)
+function animals.register(mob_def)
 	-- register entity
 	minetest.register_entity(":" .. mob_def.name, get_entity_def(mob_def))
 
