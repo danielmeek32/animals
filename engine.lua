@@ -669,7 +669,7 @@ local function get_entity_def(mob_def)
 		textures = mob_def.model.textures,
 		automatic_face_movement_dir = mob_def.model.rotation or 0.0,
 		collide_with_objects = mob_def.model.collide_with_objects or false,
-		collisionbox = mob_def.model.collisionbox or {-0.4, 0, -0.4, 0.4, 1.25, 0.4},
+		collisionbox = mob_def.model.collisionbox or {-0.25, 0, -0.25, 0.25, 1.25, 0.25},
 
 		mob_name = mob_def.name,
 		parameters = mob_def.parameters,
