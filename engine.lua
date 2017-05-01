@@ -916,8 +916,10 @@ local function get_entity_def(mob_def)
 end
 
 function animals.register(mob_def)
+	local entity_def = get_entity_def(mob_def)
+
 	-- register entity
-	minetest.register_entity(":" .. mob_def.name, get_entity_def(mob_def))
+	minetest.register_entity(":" .. mob_def.name, entity_def)
 
 	-- register abm for spawning
 	minetest.register_abm({
@@ -969,7 +971,7 @@ function animals.register(mob_def)
 
 			if count == 1 then
 				-- check space
-				if check_space(pos, mob_def.model.collisionbox) == true then
+				if check_space(pos, entity_def.collisionbox) == true then
 					-- spawn a single mob
 					minetest.add_entity({x = pos.x, y = pos.y + 1, z = pos.z}, mob_def.name)
 				end
@@ -980,7 +982,7 @@ function animals.register(mob_def)
 				local nodes = minetest.find_nodes_in_area({x = pos.x - spawn_area, y = pos.y - spawn_area, z = pos.z - spawn_area}, {x = pos.x + spawn_area, y = pos.y + spawn_area, z = pos.z + spawn_area}, mob_def.spawning.nodes)
 				local valid_nodes = {}
 				for _, node in ipairs(nodes) do
-					if check_space(node, mob_def.model.collisionbox) == true then
+					if check_space(node, entity_def.collisionbox) == true then
 						table.insert(valid_nodes, node)
 					end
 				end
