@@ -2,7 +2,7 @@ Animals mod
 ===========
 Copyright (c) 2017 Daniel <https://github.com/danielmeek32>
 
-Version: 2.0
+Version: 2.0.1
 
 IMPORTANT NOTICE: This version is incompatible with animal mods intended for
 use with version 1.0. Please update your animal mods. Loading an existing
