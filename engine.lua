@@ -418,7 +418,21 @@ local function default_on_step(self, dtime)
 		if actual_speed < target_speed - 0.1 then
 			self.stuck = true
 		else
-			self.stuck = false
+			local node_pos = self.object:getpos()
+			node_pos.y = node_pos.y + 0.5
+			local direction = self.object:getyaw()
+			node_pos.x = node_pos.x + (-math.sin(direction) * 0.5)
+			node_pos.z = node_pos.z + (math.cos(direction) * 0.5)
+			local next_node1 = minetest.get_node(node_pos)
+			node_pos.y = node_pos.y - 1.0
+			local next_node2 = minetest.get_node(node_pos)
+			node_pos.y = node_pos.y - 1.0
+			local next_node3 = minetest.get_node(node_pos)
+			if next_node1.name == "air" and next_node2.name == "air" and next_node3.name == "air" then
+				self.stuck = true
+			else
+				self.stuck = false
+			end
 		end
 	else
 		self.stuck = false
