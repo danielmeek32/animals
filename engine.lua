@@ -439,7 +439,7 @@ local function default_on_step(self, dtime)
 	-- perform actions for random modes
 	if self.mode ~= "follow" then
 		-- change direction if stuck
-		if self.stuck == true then
+		if self.stuck == true and self.modes[self.mode].change_direction_when_stuck ~= false then
 			change_direction(self)
 		end
 
