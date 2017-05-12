@@ -247,8 +247,6 @@ local function change_mode(self, new_mode)
 		-- change direction if required
 		if previous_mode == "follow" or (self.modes[self.mode] and self.modes[self.mode].change_direction_on_mode_change == true) then	-- the direction is changed when leaving follow mode otherwise the mob might keep walking in the same direction as before
 			change_direction(self)
-		else
-			change_direction(self, self.object:getyaw())
 		end
 
 		-- play sound if required
@@ -827,6 +825,20 @@ local function get_entity_def(mob_def)
 		end
 		self.get_position = function(self)
 			return self.object:getpos()
+		end
+		self.get_direction = function(self)
+			return self.object:getyaw()
+		end
+		self.set_direction = function(self, direction)
+			change_direction(self, direction)
+		end
+		self.get_velocity = function(self)
+			return self.object:getvelocity()
+		end
+		self.set_y_velocity = function(self, y_velocity)
+			local velocity = self.object:getvelocity()
+			velocity.y = y_velocity
+			self.object:setvelocity(velocity)
 		end
 		self.find_objects = function(self, radius, type, xray)
 			local objects = {}
