@@ -832,6 +832,9 @@ local function get_entity_def(mob_def)
 		self.set_direction = function(self, direction)
 			change_direction(self, direction)
 		end
+		self.choose_random_direction = function(self)
+			change_direction(self)
+		end
 		self.get_velocity = function(self)
 			return self.object:getvelocity()
 		end
