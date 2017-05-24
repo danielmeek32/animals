@@ -336,6 +336,18 @@ local function default_on_step(self, dtime)
 						child_entity.owner_name = self.owner_name
 						child_entity.breed_cooldown_timer = self.parameters.breed_cooldown_time	-- prevents the child from being able to breed immediately
 
+						-- call child's bred callback
+						local parent_a
+						local parent_b
+						if self.breed_timer < mate_entity.breed_timer then	-- this ensures that parent_a will always be the one that has been in breed mode for longer (was fed first)
+							parent_a = self
+							parent_b = mate_entity
+						else
+							parent_a = mate_entity
+							parent_b = self
+						end
+						child_entity.on_bred(child_entity, parent_a, parent_b)
+
 						-- disable breeding mode for self and mate
 						self.breed_timer = 0
 						mate_entity.breed_timer = 0
@@ -748,6 +760,12 @@ local function get_entity_def(mob_def)
 			return mob_def.on_breed(self, mate)
 		else
 			return true
+		end
+	end
+
+	entity_def.on_bred = function(self, parent_a, parent_b)
+		if mob_def.on_bred then
+			mob_def.on_bred(self, parent_a, parent_b)
 		end
 	end
 
