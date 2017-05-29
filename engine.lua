@@ -861,6 +861,9 @@ local function get_entity_def(mob_def)
 			velocity.y = y_velocity
 			self.object:setvelocity(velocity)
 		end
+		self.is_in_water = function(self)
+			return self.in_water
+		end
 		self.find_objects = function(self, radius, type, xray)
 			local objects = {}
 			local my_pos = self.object:getpos()
