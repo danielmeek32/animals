@@ -14,6 +14,15 @@
 -- GNU General Public License for more details.
 --
 
+-- check if a node is solid
+local function check_node_solid(node_def)
+	if node_def and node_def.walkable == true then
+		return true
+	else
+		return false
+	end
+end
+
 -- check if an item is in a list of items
 local function check_item(item_name, item_list)
 	for _, name in ipairs(item_list) do
@@ -860,6 +869,15 @@ local function get_entity_def(mob_def)
 			local velocity = self.object:getvelocity()
 			velocity.y = y_velocity
 			self.object:setvelocity(velocity)
+		end
+		self.is_on_ground = function(self)
+			local node_position = self:get_position()
+			node_position.y = node_position.y - 0.01
+			if check_node_solid(minetest.registered_nodes[minetest.get_node(node_position).name]) == true then
+				return true
+			else
+				return false
+			end
 		end
 		self.is_in_water = function(self)
 			return self.in_water
