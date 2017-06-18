@@ -23,6 +23,16 @@ local function check_node_solid(node_def)
 	end
 end
 
+-- check if a node is water
+local function check_node_water(node_def)
+	if node_def and (node_def.name == "default:water_source" or node_def.name == "default:water_flowing" or node_def.name == "default:river_water_source" or node_def.name == "default:river_water_flowing") then
+		return true
+	else
+		return false
+	end
+end
+
+
 -- check if an item is in a list of items
 local function check_item(item_name, item_list)
 	for _, name in ipairs(item_list) do
@@ -151,7 +161,7 @@ local function change_mode(self, new_mode)
 			-- check that the new mode is valid
 			valid = true
 			if selected_mode == "eat" then
-				if self.in_water == true then
+				if self:is_in_water() == true then
 					valid = false
 				else
 					local node_pos = self.object:getpos()
@@ -203,7 +213,7 @@ local function change_mode(self, new_mode)
 
 		-- set animation
 		local animation = self.animations[self.mode]
-		if self.in_water and self.animations["swim"] then
+		if self:is_in_water() and self.animations["swim"] then
 			animation = self.animations["swim"]
 		end
 		set_animation(self, animation)
@@ -315,7 +325,6 @@ local function default_on_step(self, dtime)
 	self.search_timer = self.search_timer + dtime
 	self.follow_timer = self.follow_timer + dtime
 	self.sound_timer = self.sound_timer - dtime
-	self.swim_timer = self.swim_timer + dtime
 	if self.breed_timer > 0 then	-- prevents the timer from wrapping around over long periods of time
 		self.breed_timer = self.breed_timer - dtime
 	end
@@ -371,16 +380,10 @@ local function default_on_step(self, dtime)
 		spawn_particles(self, 1, 0.25, 1.0, "heart.png")
 	end
 
-	-- update current node
-	local node_pos = self.object:getpos()
-	node_pos.y = node_pos.y + 0.25
-	self.current_node = minetest.get_node(node_pos)
-
 	-- handle water
-	if self.current_node.name == "default:water_source" or self.current_node.name == "default:water_flowing" or self.current_node.name == "default:river_water_source" or self.current_node.name == "default:river_water_flowing" then
+	if self:is_in_water() == true then
 		if self.in_water == false then
 			self.in_water = true
-			self.swim_timer = 0
 
 			-- set animation
 			if self.animations["swim"] then
@@ -388,20 +391,15 @@ local function default_on_step(self, dtime)
 			end
 
 			-- set acceleration for in water
-			self.object:setacceleration({x = 0, y = -0.25, z = 0})
+			self.object:setacceleration({x = 0, y = -1, z = 0})
 		end
-		if self.swim_timer > 0.25 then
-			self.swim_timer = 0
 
+		local node_pos = self.object:getpos()
+		node_pos.y = node_pos.y + 0.3
+		if check_node_water(minetest.registered_nodes[minetest.get_node(node_pos).name]) == true then
 			-- set velocity to produce bobbing effect
 			local velocity = self.object:getvelocity()
-			self.object:setvelocity({x = velocity.x, y = 0.75, z = velocity.z})
-
-			-- play swimming sounds
-			self:play_sound("swim")
-
-			-- show particles
-			spawn_particles(self, 10, 0.25, 0, "bubble.png")
+			self.object:setvelocity({x = velocity.x, y = 0.5, z = velocity.z})
 		end
 	else
 		if self.in_water == true then
@@ -522,7 +520,7 @@ local function default_on_step(self, dtime)
 				local speed = get_target_speed(self)
 				if speed > 0 then
 					local animation = self.animations["follow"]
-					if self.in_water and self.animations["swim"] then
+					if self:is_in_water() and self.animations["swim"] then
 						animation = self.animations["swim"]
 					end
 					set_animation(self, animation)
@@ -880,7 +878,13 @@ local function get_entity_def(mob_def)
 			end
 		end
 		self.is_in_water = function(self)
-			return self.in_water
+			local node_position = self:get_position()
+			node_position.y = node_position.y + 0.01
+			if check_node_water(minetest.registered_nodes[minetest.get_node(node_position).name]) == true then
+				return true
+			else
+				return false
+			end
 		end
 		self.find_objects = function(self, radius, type, xray)
 			local objects = {}
@@ -927,7 +931,6 @@ local function get_entity_def(mob_def)
 		self.search_timer = 0
 		self.follow_timer = 0
 		self.sound_timer = 0
-		self.swim_timer = 0
 		self.breed_timer = 0
 
 		-- set acceleration for on land (the mob will detect if it is in water in the first tick and respond appropriately)
