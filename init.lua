@@ -19,7 +19,10 @@ animals = {}
 local modpath = minetest.get_modpath("animals")
 
 -- mob engine
-dofile(modpath .."/engine.lua")
+local old_pathfinding = pathfinding
+dofile(modpath .. "/pathfinding.lua")
+dofile(modpath .. "/engine.lua")
+pathfinding = old_pathfinding
 
 -- items
-dofile(modpath .."/items.lua")
+dofile(modpath .. "/items.lua")

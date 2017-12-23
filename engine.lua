@@ -14,24 +14,8 @@
 -- GNU General Public License for more details.
 --
 
--- check if a node is solid
-local function check_node_solid(node_def)
-	if node_def and node_def.walkable == true then
-		return true
-	else
-		return false
-	end
-end
-
--- check if a node is water
-local function check_node_water(node_def)
-	if node_def and (node_def.name == "default:water_source" or node_def.name == "default:water_flowing" or node_def.name == "default:river_water_source" or node_def.name == "default:river_water_flowing") then
-		return true
-	else
-		return false
-	end
-end
-
+-- capture pathfinding functions
+local pathfinding = pathfinding
 
 -- check if an item is in a list of items
 local function check_item(item_name, item_list)
@@ -62,28 +46,12 @@ local function generate_interval(min_interval, max_interval, interval)
 	end
 end
 
--- check that there's enough space around the given position for the given collisionbox to fit
-local function check_space(pos, collisionbox)
-	for x = collisionbox[1], collisionbox[4] do
-		for y = collisionbox[2], collisionbox[5] do
-			for z = collisionbox[3], collisionbox[6] do
-				if minetest.get_node({x = pos.x + x, y = pos.y + y + 1, z = pos.z + z}).name ~= "air" then
-					return false
-				end
-			end
-		end
-	end
-	return true
-end
-
 -- get the correct speed for the current mode
 local function get_target_speed(self)
-	if self.mode == "follow" then
-		if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) < self.parameters.follow_stop_distance then
-			return 0
-		else
-			return self.parameters.follow_speed
-		end
+	if self.mode == "follow_idle" then
+		return 0
+	elseif self.mode == "follow" then
+		return self.parameters.follow_speed
 	else
 		return self.modes[self.mode].moving_speed or 0
 	end
@@ -186,17 +154,22 @@ local function change_mode(self, new_mode)
 		self.mode = new_mode
 
 		-- reset timers
-		if self.mode ~= "follow" and ((self.modes[self.mode].min_duration and self.modes[self.mode].max_duration) or self.modes[self.mode].duration) then
+		if self.mode ~= "follow" and self.mode ~= "follow_idle" and ((self.modes[self.mode].min_duration and self.modes[self.mode].max_duration) or self.modes[self.mode].duration) then
 			self.mode_timer = generate_interval(self.modes[self.mode].min_duration, self.modes[self.mode].max_duration, self.modes[self.mode].duration)
 		end
-		if self.mode ~= "follow" and ((self.modes[self.mode].min_direction_change_interval and self.modes[self.mode].max_direction_change_interval) or self.modes[self.mode].direction_change_interval) then
+		if self.mode ~= "follow" and self.mode ~= "follow_idle" and ((self.modes[self.mode].min_direction_change_interval and self.modes[self.mode].max_direction_change_interval) or self.modes[self.mode].direction_change_interval) then
 			self.direction_change_timer = generate_interval(self.modes[self.mode].min_direction_change_interval, self.modes[self.mode].max_direction_change_interval, self.modes[self.mode].direction_change_interval)
 		end
-		if self.mode == "follow" then
+		if self.mode == "follow" or self.mode == "follow_idle" then
 			self.follow_timer = 0.5 + 0.1	-- 0.5 is the follow_timer timeout, this is used here rather than 0 so that the mob will immediately seek out a path to the target instead of waiting for the timeout to elapse
 		end
 		if self.sounds[self.mode] and ((self.sounds[self.mode].min_interval and self.sounds[self.mode].max_interval) or self.sounds[self.mode].interval) then
 			self.sound_timer = generate_interval(self.sounds[self.mode].min_interval, self.sounds[self.mode].max_interval, self.sounds[self.mode].interval)
+		end
+
+		-- disable pathfinding if changing to follow mode
+		if self.mode == "follow" or self.mode == "follow_idle" then
+			pathfinding.disable_pathfinding(self)
 		end
 
 		-- set speed
@@ -264,7 +237,7 @@ local function change_mode(self, new_mode)
 		end
 
 		-- change direction if required
-		if previous_mode == "follow" or (self.modes[self.mode] and self.modes[self.mode].change_direction_on_mode_change == true) then	-- the direction is changed when leaving follow mode otherwise the mob might keep walking in the same direction as before
+		if previous_mode == "follow" or previous_mode == "follow_idle" or (self.modes[self.mode] and self.modes[self.mode].change_direction_on_mode_change == true) then	-- the direction is changed when leaving follow mode otherwise the mob might keep walking in the same direction as before
 			change_direction(self)
 		end
 
@@ -314,6 +287,9 @@ end
 
 -- default on_step callback
 local function default_on_step(self, dtime)
+	-- clear the pathfinding node cache
+	pathfinding.clear_node_cache()
+
 	-- timer updates
 	self.life_timer = self.life_timer + dtime
 	if self.breed_cooldown_timer > 0 then	-- prevents the timer from wrapping around over long periods of time
@@ -396,7 +372,7 @@ local function default_on_step(self, dtime)
 
 		local node_pos = self.object:getpos()
 		node_pos.y = node_pos.y + 0.3
-		if check_node_water(minetest.registered_nodes[minetest.get_node(node_pos).name]) == true then
+		if pathfinding.check_node_water(minetest.registered_nodes[minetest.get_node(node_pos).name]) == true then
 			-- set velocity to produce bobbing effect
 			local velocity = self.object:getvelocity()
 			self.object:setvelocity({x = velocity.x, y = 0.5, z = velocity.z})
@@ -416,12 +392,12 @@ local function default_on_step(self, dtime)
 	end
 
 	-- change mode randomly
-	if self.mode == "" or (self.mode ~= "follow" and ((self.modes[self.mode].min_duration and self.modes[self.mode].max_duration) or self.modes[self.mode].duration) and self.mode_timer <= 0) then
+	if self.mode == "" or (self.mode ~= "follow" and self.mode ~= "follow_idle" and ((self.modes[self.mode].min_duration and self.modes[self.mode].max_duration) or self.modes[self.mode].duration) and self.mode_timer <= 0) then
 		change_mode(self)
 	end
 
 	-- change direction randomly
-	if self.mode ~= "follow" and ((self.modes[self.mode].min_direction_change_interval and self.modes[self.mode].max_direction_change_interval) or self.modes[self.mode].direction_change_interval) and self.direction_change_timer <= 0 then
+	if self.mode ~= "follow" and self.mode ~= "follow_idle" and ((self.modes[self.mode].min_direction_change_interval and self.modes[self.mode].max_direction_change_interval) or self.modes[self.mode].direction_change_interval) and self.direction_change_timer <= 0 then
 		self.direction_change_timer = generate_interval(self.modes[self.mode].min_direction_change_interval, self.modes[self.mode].max_direction_change_interval, self.modes[self.mode].direction_change_interval)
 		change_direction(self)
 	end
@@ -433,22 +409,35 @@ local function default_on_step(self, dtime)
 		local actual_speed = vector.length(velocity)
 		local target_speed = get_target_speed(self)
 		if actual_speed < target_speed - 0.1 then
+			-- detects if the mob is not moving as quickly as it should be, having presumably collided with something
 			self.stuck = true
 		else
-			local node_pos = self.object:getpos()
-			node_pos.y = node_pos.y + 0.5
-			local direction = self.object:getyaw()
-			node_pos.x = node_pos.x + (-math.sin(direction) * 0.5)
-			node_pos.z = node_pos.z + (math.cos(direction) * 0.5)
-			local next_node1 = minetest.get_node(node_pos)
-			node_pos.y = node_pos.y - 1.0
-			local next_node2 = minetest.get_node(node_pos)
-			node_pos.y = node_pos.y - 1.0
-			local next_node3 = minetest.get_node(node_pos)
-			if next_node1.name == "air" and next_node2.name == "air" and next_node3.name == "air" then
-				self.stuck = true
-			else
-				self.stuck = false
+			self.stuck = false
+
+			-- check that the mob is not about to walk over a cliff
+			if self:is_on_ground() then	-- don't flag as stuck when falling/in the air as this causes rapid erratic direction changes
+				local scan_pos = self.object:getpos()
+				local direction = self.object:getyaw()
+				scan_pos.x = scan_pos.x + (-math.sin(direction) * 0.5)
+				scan_pos.z = scan_pos.z + (math.cos(direction) * 0.5)
+				scan_pos.y = scan_pos.y - 1
+				local drop_height = 0
+				local max_drop_height
+				if self.mode == "follow" then	-- allow maximum drop height of 2 blocks when following
+					max_drop_height = 2
+				else
+					max_drop_height = 1
+				end
+				while pathfinding.check_space(scan_pos, self.collisionbox) == true do
+					drop_height = drop_height + 1
+					scan_pos.y = scan_pos.y - 1
+					if drop_height > max_drop_height then
+						break
+					end
+				end
+				if drop_height > max_drop_height then
+					self.stuck = true
+				end
 			end
 		end
 	else
@@ -456,7 +445,7 @@ local function default_on_step(self, dtime)
 	end
 
 	-- perform actions for random modes
-	if self.mode ~= "follow" then
+	if self.mode ~= "follow" and self.mode ~= "follow_idle" then
 		-- change direction if stuck
 		if self.stuck == true and self.modes[self.mode].change_direction_when_stuck ~= false then
 			change_direction(self)
@@ -492,18 +481,76 @@ local function default_on_step(self, dtime)
 
 	-- perform actions for follow mode (this can't be an else clause because follow mode may have been enabled in the previous block)
 	if self.mode == "follow" then
+		-- change direction if stuck
+		if self.stuck == true then
+			pathfinding.disable_pathfinding(self)
+			change_direction(self)
+			self.follow_timer = 0	-- don't reset direction for another follow tick
+		end
+
+		-- follow path if pathfinding is enabled
+		if self.pathfinding_enabled == true then
+			local my_pos = self.object:getpos()
+			local waypoint = self.path[self.path_index]
+
+			-- check if we've passed the waypoint
+			local passed = false
+			if self.path_index < #self.path then
+				local waypoint_exit_direction = get_polar_direction(vector.direction({ x = waypoint.x, y = 0, z = waypoint.z }, { x = self.path[self.path_index + 1].x, y = 0, z = self.path[self.path_index + 1].z }))
+				local waypoint_self_direction = get_polar_direction(vector.direction({ x = waypoint.x, y = 0, z = waypoint.z }, { x = my_pos.x, y = 0, z = my_pos.z }))
+				if (waypoint_self_direction > waypoint_exit_direction - 0.2 and waypoint_self_direction < waypoint_exit_direction + 0.2) or (waypoint_self_direction - (math.pi * 2) > waypoint_exit_direction - 0.2 and waypoint_self_direction - (math.pi * 2) < waypoint_exit_direction + 0.2) then
+					passed = true
+				end
+			end
+			if passed == false then
+				if self.waypoint_approach_direction == nil then
+					self.waypoint_approach_direction = minetest.dir_to_facedir(vector.direction({ x = my_pos.x, y = 0, z = my_pos.z }, { x = waypoint.x, y = 0, z = waypoint.z }))
+				end
+				if self.waypoint_approach_direction == 0 and my_pos.z > waypoint.z then
+					passed = true
+				elseif self.waypoint_approach_direction == 1 and my_pos.x > waypoint.x then
+					passed = true
+				elseif self.waypoint_approach_direction == 2 and my_pos.z < waypoint.z then
+					passed = true
+				elseif self.waypoint_approach_direction == 3 and my_pos.x < waypoint.x then
+					passed = true
+				end
+			end
+			if passed == true then
+				self.path_index = self.path_index + 1
+				self.waypoint_approach_direction = nil
+				if self.path_index > #self.path then
+					-- reached end of path
+					pathfinding.disable_pathfinding(self)
+				else
+					waypoint = self.path[self.path_index]
+				end
+			end
+
+			-- change direction to go towards waypoint
+			if self.pathfinding_enabled == true then
+				if not self.last_waypoint_pos or not (self.last_waypoint_pos.x == waypoint.x and self.last_waypoint_pos.z == waypoint.z) then
+					local waypoint_pos = { x = waypoint.x, y = my_pos.y, z = waypoint.z }
+					local direction = vector.direction(my_pos, waypoint_pos)
+					direction.y = 0
+					direction = vector.normalize(direction)
+					local polar_direction = get_polar_direction(direction)
+					change_direction(self, polar_direction)
+					self.last_waypoint_pos = { x = waypoint.x, z = waypoint.z }
+				end
+			end
+		end
+
+		-- update position of and direction to target
 		if self.target and self.follow_timer > 0.5 then
 			self.follow_timer = 0
 
 			-- get the distance and direction to the target
 			local my_pos = self.object:getpos()
 			local target_pos = self.target:getpos()
-			local direction = vector.direction(my_pos, target_pos)
-			direction.y = 0
-			direction = vector.normalize(direction)
 			local distance = vector.distance(my_pos, target_pos)
 
-			-- stop following if autofollowing and the target is out of range or is no longer wielding the correct item
+			-- disable following if autofollowing and the target is out of range or is no longer wielding the correct item
 			if self.autofollowing == true then
 				local item_name = self.target:get_wielded_item():get_name()
 				if distance > self.parameters.follow_distance or (item_name and check_item(item_name, self.parameters.follow_items) == false) then
@@ -511,22 +558,59 @@ local function default_on_step(self, dtime)
 				end
 			end
 
-			if self.mode == "follow" then	-- detects if the current mode was changed in the previous block
-				-- update the direction
+			-- switch to following idle mode if autofollowing and the target is within stopping distance
+			if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) < self.parameters.follow_stop_distance then
+				change_mode(self, "follow_idle")
+			end
+
+			if self.mode == "follow" then	-- detects if mode changed in the previous block
+				if pathfinding.direct_path(my_pos, target_pos, self.collisionbox) then
+					-- disable pathfinding if we have a direct path to the target
+					pathfinding.disable_pathfinding(self)
+				else
+					-- find/update path
+					pathfinding.pathfind(self)
+				end
+				if not self.pathfinding_enabled then
+					-- update direction
+					local direction = vector.direction(my_pos, target_pos)
+					direction.y = 0
+					direction = vector.normalize(direction)
+					local polar_direction = get_polar_direction(direction)
+					change_direction(self, polar_direction)
+				end
+			end
+		end
+	elseif self.mode == "follow_idle" then
+		-- update position of and direction to target
+		if self.target and self.follow_timer > 0.5 then
+			self.follow_timer = 0
+
+			-- get the distance and direction to the target
+			local my_pos = self.object:getpos()
+			local target_pos = self.target:getpos()
+			local distance = vector.distance(my_pos, target_pos)
+
+			-- disable following if autofollowing and the target is out of range or is no longer wielding the correct item
+			if self.autofollowing == true then
+				local item_name = self.target:get_wielded_item():get_name()
+				if distance > self.parameters.follow_distance or (item_name and check_item(item_name, self.parameters.follow_items) == false) then
+					change_mode(self)
+				end
+			end
+
+			-- switch to following mode if autofollowing and the target is outside of stopping distance
+			if self.autofollowing == true and self.target and vector.distance(self.object:getpos(), self.target:getpos()) > self.parameters.follow_stop_distance then
+				change_mode(self, "follow")
+			end
+
+			if self.mode == "follow_idle" then	-- detects if mode changed in the previous block
+				-- update direction
+				local direction = vector.direction(my_pos, target_pos)
+				direction.y = 0
+				direction = vector.normalize(direction)
 				local polar_direction = get_polar_direction(direction)
 				change_direction(self, polar_direction)
-
-				-- update the animation
-				local speed = get_target_speed(self)
-				if speed > 0 then
-					local animation = self.animations["follow"]
-					if self:is_in_water() and self.animations["swim"] then
-						animation = self.animations["swim"]
-					end
-					set_animation(self, animation)
-				else
-					set_animation(self, self.animations["idle"])
-				end
 			end
 		end
 	end
@@ -580,7 +664,7 @@ local function default_on_punch(self, puncher, time_from_last_punch, tool_capabi
 		change_mode(self, "death")
 
 		-- allow the mob to be passed through
-		self.object:set_properties({collide_with_objects = false, collisionbox = {x = 0, y = 0, z = 0}})
+		self.object:set_properties({collide_with_objects = false, collisionbox = {0, 0, 0, 0, 0, 0}})
 
 		-- play death sound
 		self:play_sound("death")
@@ -709,6 +793,17 @@ local function get_entity_def(mob_def)
 		modes = mob_def.modes,
 		drops = mob_def.drops,
 	}
+
+	-- create "follow" and "follow_idle" animations if they don't already exist
+	if not entity_def.animations["follow"] then
+		local follow_animation = table.copy(entity_def.animations["walk"])
+		follow_animation.speed = follow_animation.speed * (entity_def.follow_speed / entity_def.modes["walk"].moving_speed)
+		entity_def.animations["follow"] = follow_animation
+	end
+	if not entity_def.animations["follow_idle"] then
+		local follow_idle_animation = table.copy(entity_def.animations["idle"])
+		entity_def.animations["follow_idle"] = follow_idle_animation
+	end
 
 	-- create "panic" mode and animations if they don't already exist
 	if not entity_def.modes["panic"] then
@@ -869,9 +964,9 @@ local function get_entity_def(mob_def)
 			self.object:setvelocity(velocity)
 		end
 		self.is_on_ground = function(self)
-			local node_position = self:get_position()
-			node_position.y = node_position.y - 0.01
-			if check_node_solid(minetest.registered_nodes[minetest.get_node(node_position).name]) == true then
+			local position = self:get_position()
+			position.y = position.y - 0.01
+			if pathfinding.check_space(position, self.collisionbox) == false then
 				return true
 			else
 				return false
@@ -880,7 +975,7 @@ local function get_entity_def(mob_def)
 		self.is_in_water = function(self)
 			local node_position = self:get_position()
 			node_position.y = node_position.y + 0.01
-			if check_node_water(minetest.registered_nodes[minetest.get_node(node_position).name]) == true then
+			if pathfinding.check_node_water(minetest.registered_nodes[minetest.get_node(node_position).name]) == true then
 				return true
 			else
 				return false
@@ -1042,7 +1137,7 @@ function animals.register(mob_def)
 
 			if count == 1 then
 				-- check space
-				if check_space(pos, entity_def.collisionbox) == true then
+				if pathfinding.check_space({ x = pos.x, y = pos.y + 1, z = pos.z }, entity_def.collisionbox) == true then
 					-- spawn a single mob
 					minetest.add_entity({x = pos.x, y = pos.y + 1, z = pos.z}, mob_def.name)
 				end
@@ -1053,7 +1148,7 @@ function animals.register(mob_def)
 				local nodes = minetest.find_nodes_in_area({x = pos.x - spawn_area, y = pos.y - spawn_area, z = pos.z - spawn_area}, {x = pos.x + spawn_area, y = pos.y + spawn_area, z = pos.z + spawn_area}, mob_def.spawning.nodes)
 				local valid_nodes = {}
 				for _, node in ipairs(nodes) do
-					if check_space(node, entity_def.collisionbox) == true then
+					if pathfinding.check_space({ x = node.x, y = node.y + 1, z = node.z }, entity_def.collisionbox) == true then
 						table.insert(valid_nodes, node)
 					end
 				end
