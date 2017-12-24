@@ -670,6 +670,7 @@ local function default_on_punch(self, puncher, time_from_last_punch, tool_capabi
 		self:play_sound("death")
 
 		-- remove the mob after the death duration
+		self.object:set_hp(1)	-- work around Minetest 0.4.16 "feature" that automatically removes the mob as soon as its health is 0, preventing death animation from playing
 		minetest.after(self.parameters.death_duration, function()
 			self.object:remove()
 		end)
