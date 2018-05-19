@@ -1043,6 +1043,9 @@ local function get_entity_def(mob_def)
 	end
 
 	entity_def.on_step = function(self, dtime)
+		if self.mode == "death" then
+			return
+		end
 		if mob_def.on_step and mob_def.on_step(self, dtime) == true then
 			return
 		end
